@@ -32,7 +32,7 @@ ocean = "port_ocean.cli.cli:cli_start"
 
 [build-system]
 requires = ["poetry-core"]
-build-backend = "poetry.masonry.api"
+build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.dependencies]
 python = "^3.11"
