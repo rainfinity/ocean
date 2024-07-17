@@ -1,127 +1,289 @@
 [
-    {
-        "identifier": "pagerdutyService",
-        "description": "This blueprint represents a PagerDuty service in our software catalog",
-        "title": "PagerDuty Service",
-        "icon": "pagerduty",
-        "schema": {
-          "properties": {
-            "status": {
-              "title": "Status",
-              "type": "string"
-            },
-            "url": {
-              "title": "URL",
-              "type": "string",
-              "format": "url"
-            },
-            "oncall": {
-              "title": "On Call",
-              "type": "array",
-              "items": {
-                "type": "string",
-                "format": "user"
-              }
-            }
-          },
-          "required": []
+  {
+    "identifier": "pagerdutyService",
+    "description": "This blueprint represents a PagerDuty service in our software catalog",
+    "title": "PagerDuty Service",
+    "icon": "pagerduty",
+    "schema": {
+      "properties": {
+        "status": {
+          "title": "Status",
+          "type": "string",
+          "enum": [
+            "active",
+            "warning",
+            "critical",
+            "maintenance",
+            "disabled"
+          ],
+          "enumColors": {
+            "active": "green",
+            "warning": "yellow",
+            "critical": "red",
+            "maintenance": "lightGray",
+            "disabled": "darkGray"
+          }
         },
-        "mirrorProperties": {},
-        "calculationProperties": {},
-        "relations": {}
+        "url": {
+          "title": "URL",
+          "type": "string",
+          "format": "url"
+        },
+        "oncall": {
+          "title": "On Call",
+          "type": "string",
+          "format": "user"
+        },
+        "secondaryOncall": {
+          "title": "Secondary On Call",
+          "type": "string",
+          "format": "user"
+        },
+        "escalationLevels": {
+          "title": "Escalation Levels",
+          "type": "number"
+        },
+        "meanSecondsToResolve": {
+          "title": "Mean Seconds to Resolve",
+          "type": "number"
+        },
+        "meanSecondsToFirstAck": {
+          "title": "Mean Seconds to First Acknowledge",
+          "type": "number"
+        },
+        "meanSecondsToEngage": {
+          "title": "Mean Seconds to Engage",
+          "type": "number"
+        }
       },
-      {
-        "identifier": "pagerdutyIncident",
-        "description": "This blueprint represents a PagerDuty incident in our software catalog",
-        "title": "PagerDuty Incident",
-        "icon": "pagerduty",
-        "schema": {
-          "properties": {
-            "status": {
-              "type": "string",
-              "title": "Incident Status",
-              "enum": [
-                "triggered",
-                "annotated",
-                "acknowledged",
-                "reassigned",
-                "escalated",
-                "reopened",
-                "resolved"
-              ]
-            },
-            "url": {
-              "type": "string",
-              "format": "url",
-              "title": "Incident URL"
-            },
-            "urgency": {
-              "type": "string",
-              "title": "Incident Urgency",
-              "enum": ["high", "low"]
-            },
-            "responder": {
-              "type": "string",
-              "title": "Assignee"
-            },
-            "escalation_policy": {
-              "type": "string",
-              "title": "Escalation Policy"
-            },
-            "created_at": {
-                "title": "Create At",
-                "type": "string",
-                "format": "date-time"
-              },
-            "updated_at": {
-                "title": "Updated At",
-                "type": "string",
-                "format": "date-time"
-              }
-          },
-          "required": []
+      "required": []
+    },
+    "mirrorProperties": {},
+    "calculationProperties": {},
+    "relations": {}
+  },
+  {
+    "identifier": "pagerdutyIncident",
+    "description": "This blueprint represents a PagerDuty incident in our software catalog",
+    "title": "PagerDuty Incident",
+    "icon": "pagerduty",
+    "schema": {
+      "properties": {
+        "status": {
+          "type": "string",
+          "title": "Incident Status",
+          "enum": [
+            "triggered",
+            "annotated",
+            "acknowledged",
+            "reassigned",
+            "escalated",
+            "reopened",
+            "resolved"
+          ],
+          "enumColors": {
+            "triggered": "red",
+            "annotated": "blue",
+            "acknowledged": "yellow",
+            "reassigned": "blue",
+            "escalated": "yellow",
+            "reopened": "red",
+            "resolved": "green"
+          }
         },
-        "mirrorProperties": {},
-        "calculationProperties": {},
-        "relations": {
-          "pagerdutyService": {
-            "title": "PagerDuty Service",
-            "target": "pagerdutyService",
-            "required": false,
-            "many": true
+        "url": {
+          "type": "string",
+          "format": "url",
+          "title": "Incident URL"
+        },
+        "urgency": {
+          "title": "Incident Urgency",
+          "type": "string",
+          "enum": [
+            "high",
+            "low"
+          ],
+          "enumColors": {
+            "high": "red",
+            "low": "green"
+          }
+        },
+        "priority": {
+          "type": "string",
+          "title": "Priority",
+          "enum": [
+            "P1",
+            "P2",
+            "P3",
+            "P4",
+            "P5"
+          ],
+          "enumColors": {
+            "P1": "red",
+            "P2": "yellow",
+            "P3": "blue",
+            "P4": "lightGray",
+            "P5": "darkGray"
+          }
+        },
+        "description": {
+          "type": "string",
+          "title": "Description"
+        },
+        "assignees": {
+          "title": "Assignees",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "user"
+          }
+        },
+        "escalation_policy": {
+          "type": "string",
+          "title": "Escalation Policy"
+        },
+        "created_at": {
+          "title": "Create At",
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": []
+    },
+    "mirrorProperties": {},
+    "calculationProperties": {},
+    "relations": {
+      "pagerdutyService": {
+        "title": "PagerDuty Service",
+        "target": "pagerdutyService",
+        "required": false,
+        "many": true
+      }
+    }
+  },
+  {
+    "identifier": "pagerdutySchedule",
+    "description": "This blueprint represents a PagerDuty schedule in our software catalog",
+    "title": "PagerDuty Schedule",
+    "icon": "pagerduty",
+    "schema": {
+      "properties": {
+        "url": {
+          "title": "Schedule URL",
+          "type": "string",
+          "format": "url"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "users": {
+          "title": "Users",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "user"
           }
         }
       },
-      {
-        "identifier": "pagerdutySchedule",
-        "description": "This blueprint represents a PagerDuty schedule in our software catalog",
-        "title": "PagerDuty Schedule",
-        "icon": "pagerduty",
-        "schema": {
-          "properties": {
-            "url": {
-              "title": "Schedule URL",
-              "type": "string",
-              "format": "url"
-            },
-            "timezone": {
-              "title": "Timezone",
-              "type": "string"
-            },
-            "description": {
-              "title": "Description",
-              "type": "string"
-            },
-            "users": {
-              "title": "Users",
-              "type": "array"
-            }
-          },
-          "required": []
+      "required": []
+    },
+    "mirrorProperties": {},
+    "calculationProperties": {},
+    "aggregationProperties": {},
+    "relations": {}
+  },
+  {
+    "identifier": "pagerdutyOncall",
+    "description": "This blueprint represents a PagerDuty oncall schedule in our software catalog",
+    "title": "PagerDuty Oncall Schedule",
+    "icon": "pagerduty",
+    "schema": {
+      "properties": {
+        "url": {
+          "title": "Oncall Schedule URL",
+          "type": "string",
+          "format": "url"
         },
-        "mirrorProperties": {},
-        "calculationProperties": {},
-        "aggregationProperties": {},
-        "relations": {}
+        "user": {
+          "title": "User",
+          "type": "string",
+          "format": "user"
+        },
+        "startDate": {
+          "title": "Start Date",
+          "type": "string",
+          "format": "date-time"
+        },
+        "endDate": {
+          "title": "End Date",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": []
+    },
+    "mirrorProperties": {},
+    "calculationProperties": {},
+    "aggregationProperties": {},
+    "relations": {
+      "pagerdutySchedule": {
+        "title": "PagerDuty Schedule",
+        "target": "pagerdutySchedule",
+        "required": false,
+        "many": true
+      },
+      "pagerdutyEscalationPolicy": {
+        "title": "Escalation Policy",
+        "target": "pagerdutyEscalationPolicy",
+        "required": false,
+        "many": false
       }
+    }
+  },
+  {
+    "identifier": "pagerdutyEscalationPolicy",
+    "description": "This blueprint represents a PagerDuty escalation policy in our software catalog",
+    "title": "PagerDuty Escalation Policy",
+    "icon": "pagerduty",
+    "schema": {
+      "properties": {
+        "url": {
+          "title": "URL",
+          "type": "string",
+          "format": "url"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "primaryOncall": {
+          "title": "Primary Oncall",
+          "type": "string",
+          "format": "user"
+        },
+        "escalationRules": {
+          "title": "Escalation Rules",
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": []
+    },
+    "mirrorProperties": {},
+    "calculationProperties": {},
+    "aggregationProperties": {},
+    "relations": {}
+  }
 ]

@@ -6,14 +6,14 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 from port_ocean.clients.port.types import UserAgentType
 from port_ocean.clients.port.utils import handle_status_code
-from port_ocean.utils import get_time
+from port_ocean.utils.misc import get_time
 
 
 class TokenResponse(BaseModel):
     access_token: str = Field(alias="accessToken")
     expires_in: int = Field(alias="expiresIn")
     token_type: str = Field(alias="tokenType")
-    _retrieved_time: int = PrivateAttr(get_time())
+    _retrieved_time: int = PrivateAttr(default_factory=lambda: int(get_time()))
 
     @property
     def expired(self) -> bool:
@@ -49,7 +49,9 @@ class PortAuthentication:
 
         credentials = {"clientId": client_id, "clientSecret": client_secret}
         response = await self.client.post(
-            f"{self.api_url}/auth/access_token", json=credentials
+            f"{self.api_url}/auth/access_token",
+            json=credentials,
+            extensions={"retryable": True},
         )
         handle_status_code(response)
         return TokenResponse(**response.json())
@@ -79,5 +81,4 @@ class PortAuthentication:
             self.last_token_object = await self._get_token(
                 self.client_id, self.client_secret
             )
-
         return self.last_token_object.full_token

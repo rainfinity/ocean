@@ -16,16 +16,15 @@ PROVIDER_CONFIG_PATTERN = r"^[a-zA-Z0-9]+ .*$"
 
 def read_yaml_config_settings_source(
     settings: "BaseOceanSettings", base_path: str
-) -> str:
+) -> dict[str, Any]:
     yaml_file = getattr(settings.__config__, "yaml_file", "")
 
     assert yaml_file, "Settings.yaml_file not properly configured"
     path = Path(base_path, yaml_file)
 
     if not path.exists():
-        raise FileNotFoundError(f"Could not open yaml settings file at: {path}")
-
-    return path.read_text("utf-8")
+        return {}
+    return yaml.safe_load(path.read_text("utf-8"))
 
 
 def parse_config_provider(value: str) -> tuple[str, str]:
@@ -122,14 +121,16 @@ def decamelize_config(
 def load_providers(
     settings: "BaseOceanSettings", existing_values: dict[str, Any], base_path: str
 ) -> dict[str, Any]:
-    yaml_content = read_yaml_config_settings_source(settings, base_path)
-    data = yaml.safe_load(yaml_content)
+    data = read_yaml_config_settings_source(settings, base_path)
     snake_case_config = decamelize_config(settings, data)
     return parse_providers(settings, snake_case_config, existing_values)
 
 
 class BaseOceanSettings(BaseSettings):
     base_path: str
+
+    def get_sensitive_fields_data(self) -> set[str]:
+        return _get_sensitive_information(self)
 
     class Config:
         yaml_file = "./config.yaml"
@@ -153,3 +154,29 @@ class BaseOceanSettings(BaseSettings):
                     s, env_settings(s), init_settings.init_kwargs["base_path"]
                 ),
             )
+
+
+class BaseOceanModel(BaseModel):
+    def get_sensitive_fields_data(self) -> set[str]:
+        return _get_sensitive_information(self)
+
+
+def _get_sensitive_information(
+    model: BaseOceanModel | BaseSettings,
+) -> set[str]:
+    sensitive_fields = [
+        field_name
+        for field_name, field in model.__fields__.items()
+        if field.field_info.extra.get("sensitive", False)
+    ]
+    sensitive_set = {str(getattr(model, field_name)) for field_name in sensitive_fields}
+
+    recursive_sensitive_data = [
+        getattr(model, field_name).get_sensitive_fields_data()
+        for field_name, field in model.__fields__.items()
+        if isinstance(getattr(model, field_name), BaseOceanModel)
+    ]
+    for sensitive_data in recursive_sensitive_data:
+        sensitive_set.update(sensitive_data)
+
+    return sensitive_set

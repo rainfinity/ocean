@@ -1,0 +1,94 @@
+resources:
+  - kind: cloudresourcemanager.googleapis.com/Project
+    selector:
+      query: "true"
+    port:
+      entity:
+        mappings:
+          identifier: ".name"
+          blueprint: '"gcpProject"'
+          title: ".display_name"
+  - kind: container.googleapis.com/Cluster
+    selector:
+      query: "true"
+    port:
+      entity:
+        mappings:
+          identifier: ".name"
+          title: '.name | split("/") | last'
+          blueprint: '"gcpCloudResource"'
+          properties:
+            type: '.name | split("/") | .[-2]'
+            location: ".location"
+          relations:
+            project: ".__project.name"
+  - kind: cloudfunctions.googleapis.com/CloudFunction
+    selector:
+      query: "true"
+    port:
+      entity:
+        mappings:
+          identifier: ".name"
+          title: '.name | split("/") | last'
+          blueprint: '"gcpCloudResource"'
+          properties:
+            type: '.name | split("/") | .[-2]'
+            location: ".location"
+          relations:
+            project: ".__project.name"
+  - kind: pubsub.googleapis.com/Topic
+    selector:
+      query: "true"
+    port:
+      entity:
+        mappings:
+          identifier: ".name"
+          title: '.name | split("/") | last'
+          blueprint: '"gcpCloudResource"'
+          properties:
+            type: '.name | split("/") | .[-2]'
+            location: ".location"
+          relations:
+            project: ".__project.name"
+  - kind: compute.googleapis.com/Disk
+    selector:
+      query: "true"
+    port:
+      entity:
+        mappings:
+          identifier: ".name"
+          title: '.name | split("/") | last'
+          blueprint: '"gcpCloudResource"'
+          properties:
+            type: '.name | split("/") | .[-2]'
+            location: ".location"
+          relations:
+            project: ".__project.name"
+  - kind: pubsub.googleapis.com/Subscription
+    selector:
+      query: "true"
+    port:
+      entity:
+        mappings:
+          identifier: ".name"
+          title: '.name | split("/") | last'
+          blueprint: '"gcpCloudResource"'
+          properties:
+            type: '.name | split("/") | .[-2]'
+            location: ".location"
+          relations:
+            project: ".__project.name"
+  - kind: iam.googleapis.com/ServiceAccount
+    selector:
+      query: "true"
+    port:
+      entity:
+        mappings:
+          identifier: ".name"
+          title: '.name | split("/") | last'
+          blueprint: '"gcpCloudResource"'
+          properties:
+            type: '.name | split("/") | .[-2]'
+            location: ".location"
+          relations:
+            project: ".__project.name"

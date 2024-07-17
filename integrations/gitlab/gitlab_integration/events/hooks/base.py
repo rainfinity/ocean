@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Any
-
-from gitlab.v4.objects import Project
 from loguru import logger
+from gitlab.v4.objects import Project
 
 from gitlab_integration.gitlab_service import GitlabService
 
@@ -18,16 +17,18 @@ class HookHandler(ABC):
         self.gitlab_service = gitlab_service
 
     @abstractmethod
-    async def _on_hook(self, body: dict[str, Any], gitlab_project: Project) -> None:
+    async def on_hook(self, event: str, body: dict[str, Any]) -> None:
         pass
 
+
+class ProjectHandler(HookHandler):
     async def on_hook(self, event: str, body: dict[str, Any]) -> None:
         logger.info(f"Handling {event}")
 
         project_id = (
             body["project_id"] if "project_id" in body else body["project"]["id"]
         )
-        project = self.gitlab_service.get_project(project_id)
+        project = await self.gitlab_service.get_project(project_id)
 
         if project:
             logger.info(
@@ -39,3 +40,7 @@ class HookHandler(ABC):
             logger.info(
                 f"Project {body['project']['id']} was filtered for event {event}. Skipping..."
             )
+
+    @abstractmethod
+    async def _on_hook(self, body: dict[str, Any], gitlab_project: Project) -> None:
+        pass

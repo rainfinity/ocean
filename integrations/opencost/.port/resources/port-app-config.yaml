@@ -3,7 +3,7 @@ deleteDependentEntities: true
 resources:
   - kind: cost
     selector:
-      query: 'true'
+      query: "true"
     port:
       entity:
         mappings:
@@ -11,22 +11,41 @@ resources:
           identifier: .name
           title: .name
           properties:
-              cluster: .properties.cluster
-              namespace: .properties.namespace
-              startDate: .start
-              endDate: .end
-              cpuCoreHours: .cpuCoreHours
-              cpuCost: .cpuCost
-              cpuEfficiency: .cpuEfficiency
-              gpuHours: .gpuHours
-              gpuCost: .gpuCost
-              networkCost: .networkCost
-              loadBalancerCost: .loadBalancerCost
-              pvCost: .pvCost
-              ramBytes: .ramBytes
-              ramCost: .ramCost
-              ramEfficiency: .ramEfficiency
-              sharedCost: .sharedCost
-              externalCost: .externalCost
-              totalCost: .totalCost
-              totalEfficiency: .totalEfficiency
+            cluster: .properties.cluster
+            namespace: .properties.namespace
+            startDate: .start
+            endDate: .end
+            cpuCoreHours: .cpuCoreHours
+            cpuCost: .cpuCost
+            cpuEfficiency: .cpuEfficiency
+            gpuHours: .gpuHours
+            gpuCost: .gpuCost
+            networkCost: .networkCost
+            loadBalancerCost: .loadBalancerCost
+            pvCost: .pvCost
+            ramBytes: .ramBytes
+            ramCost: .ramCost
+            ramEfficiency: .ramEfficiency
+            sharedCost: .sharedCost
+            externalCost: .externalCost
+            totalCost: .totalCost
+            totalEfficiency: .totalEfficiency
+
+  - kind: cloudcost
+    selector:
+      query: "true"
+      cloudcostAggregate: "provider"
+    port:
+      entity:
+        mappings:
+          blueprint: '"openCostCloudcost"'
+          identifier: .properties.provider + "-" + .window.start + "-" + .window.end
+          title: .properties.provider + "-" + .window.start + "-" + .window.end
+          properties:
+            startDate: .window.start
+            endDate: .window.end
+            listCost: .listCost.cost
+            netCost: .netCost.cost
+            amortizedNetCost: .amortizedNetCost.cost
+            invoicedCost: .invoicedCost.cost
+            amortizedCost: .amortizedCost.cost

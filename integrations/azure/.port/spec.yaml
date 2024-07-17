@@ -1,6 +1,6 @@
-type: azure
 description: azure integration for Port Ocean
 icon: Azure
+docs: https://docs.getport.io/build-your-software-catalog/sync-data-to-catalog/cloud-providers/azure/
 features:
   - type: exporter
     section: Cloud Providers
@@ -11,18 +11,37 @@ features:
       - kind: storageAccount
       - kind: virtualMachine
       - kind: storageContainer
+saas:
+  enabled: false
 configurations:
-  - name: subscriptionId
-    required: true
+  - name: azureClientId
+    required: false
     type: string
     sensitive: true
-    description: Azure subscription ID to export resources from
+    description: Azure Client ID, for more information on how to create and manage the Credentials see here https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal.
+  - name: azureClientSecret
+    required: false
+    type: string
+    sensitive: true
+    description: Azure Client Secret, for more information on how to create and manage the Credentials see here information https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal.
+  - name: azureTenantId
+    required: false
+    type: string
+    sensitive: true
+    description: Azure Tenant ID, for more information on how to create and manage the Credentials see here https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal.
+deploymentMethodRequirements:
+  - type: default
+    configurations: ['azureClientId', 'azureClientSecret', 'azureTenantId']
 deploymentMethodOverride:
+  - type: helm
+  - type: docker
+  - type: githubWorkflow
+  - type: gitlabCI
   - type: terraform
     module: port-labs/integration-factory/ocean
     example: azure_container_app_azure_integration
     title: Azure Container App
-    version: ">=0.0.17"
+    version: ">=0.0.25"
     extraVars:
       - name: event_grid_system_topic_name
         description: The name of the event grid system topic of type Microsoft.Resources.Subscriptions to use to receive events from Azure. If not set, a new topic will be created. Note that Azure supports only one Microsoft.Resources.Subscriptions topic in account.
@@ -37,16 +56,16 @@ deploymentMethodOverride:
           - "Microsoft.App/containerApp"
           - "Microsoft.Storage/storageAccounts"
           - "Microsoft.Compute/virtualMachines"
+          - "Microsoft.ContainerService/managedClusters"
           - "Microsoft.Network/loadBalancers"
+          - "Microsoft.Network/virtualNetworks"
         type: array
       - name: action_permissions_list
         description: A list of permissions that will be assigned to the Azure Integration User to export Azure Resources.
         required: true
         default:
+          - "Microsoft.Resources/subscriptions/read"
           - "Microsoft.Resources/subscriptions/resourceGroups/read"
           - "Microsoft.Resources/subscriptions/resources/read"
-          - "Microsoft.app/containerapps/read"
-          - "Microsoft.Storage/storageAccounts/*/read"
-          - "Microsoft.ContainerService/managedClusters/read"
-          - "Microsoft.Network/loadBalancers/read"
+          - "*/read"
         type: array

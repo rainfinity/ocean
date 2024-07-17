@@ -7,12 +7,446 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 <!-- towncrier release notes start -->
 
+0.1.91 (2024-07-10)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.9.4 (#1)
+
+
+0.1.90 (2024-07-09)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.9.3 (#1)
+
+
+0.1.89 (2024-07-07)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.9.2 (#1)
+
+
+0.1.88 (2024-06-23)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.9.1 (#1)
+
+
+0.1.87 (2024-06-19)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.9.0 (#1)
+
+
+0.1.86 (2024-06-16)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.8.0 (#1)
+
+
+0.1.85 (2024-06-13)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.7.1 (#1)
+
+
+0.1.84 (2024-06-13)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.7.0 (#1)
+
+
+0.1.83 (2024-06-10)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.6.0 (#1)
+
+
+0.1.82 (2024-06-05)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.27 (#1)
+
+
+0.1.81 (2024-06-03)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.25 (#1)
+
+
+0.1.80 (2024-06-02)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.24 (#1)
+
+
+0.1.79 (2024-05-30)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.23 (#1)
+- Updated the base image used in the Dockerfile that is created during integration scaffolding from `python:3.11-slim-buster` to `python:3.11-slim-bookworm`
+
+
+0.1.78 (2024-05-29)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.22 (#1)
+
+
+0.1.77 (2024-05-26)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.21 (#1)
+
+
+0.1.76 (2024-05-26)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.20 (#1)
+- Removed the config.yaml file due to unused overrides
+
+
+0.1.75 (2024-05-19)
+===================
+
+### Bug Fixes
+
+- Fixed webhooks responses timeouts to gitlab using queue to return immediate response
+
+
+0.1.74 (2024-05-16)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.19 (#1)
+
+
+0.1.73 (2024-05-12)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.18 (#1)
+
+
+0.1.72 (2024-05-05)
+===================
+
+### Improvements
+
+- Added try-catch blocks to api endpoints
+
+0.1.71 (2024-05-01)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.17 (#1)
+
+
+0.1.70 (2024-05-01)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.16 (#1)
+
+
+0.1.69 (2024-04-30)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.15 (#1)
+
+
+0.1.68 (2024-04-24)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.14 (#1)
+
+
+0.1.67 (2024-04-17)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.12 (#1)
+
+
+0.1.66 (2024-04-11)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.11 (#1)
+
+
+0.1.65 (2024-04-10)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.10 (#1)
+
+
+0.1.64 (2024-04-09)
+===================
+
+### Features
+
+- Added more logs in event handling and webhook creation (PORT-7600)
+
+
+0.1.63 (2024-04-02)
+===================
+
+### Features
+
+- Added the ability to cofigure which events to listen to on group webhook (PORT-7417)
+
+
+0.1.62 (2024-04-01)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.9 (#1)
+
+
+0.1.61 (2024-03-28)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.8 (#1)
+
+
+0.1.60 (2024-03-25)
+===================
+
+### Features
+
+- Changed listening to default branch unless mentioned otherwise in mapping (PORT-7141)
+
+
+0.1.59 (2024-03-24)
+===================
+
+### Bug Fixes
+
+- Fix bug that could not run on startup when not configuring param tokenGroupsHooksOverridMapping (PORT-7326)
+
+
+0.1.58 (2024-03-20)
+===================
+
+### Features
+
+- Added support for webhooks creation by specified groups through the config (PORT-7140)
+
+
+0.1.57 (2024-03-20)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.7 (#1)
+
+
+0.1.56 (2024-03-17)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.6 (#1)
+
+
+0.1.55 (2024-03-06)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.5 (#1)
+
+
+0.1.54 (2024-03-03)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.4 (#1)
+
+
+0.1.53 (2024-03-03)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.3 (#1)
+
+
+0.1.52 (2024-02-21)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.2 (#1)
+
+
+0.1.51 (2024-02-20)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.1 (#1)
+
+
+0.1.50 (2024-02-18)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.5.0 (#1)
+
+
+0.1.49 (2024-01-23)
+===================
+
+### Features
+
+- Added group & subgroup webhook support (PORT-6229)
+
+### Bug Fixes
+
+- Fixed a bug when checking whether a group should be synced or not (#1)
+
+
+0.1.48 (2024-01-23)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.4.17 (#1)
+
+
+0.1.47 (2024-01-12)
+===================
+
+### Features
+
+- Added group & subgroup resource support (#1)
+
+
+0.1.46 (2024-01-11)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.4.16 (#1)
+
+
+0.1.45 (2024-01-07)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.4.15 (#1)
+
+
+0.1.44 (2024-01-07)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.4.14 (#1)
+
+
+0.1.43 (2024-01-04)
+===================
+
+### Improvements
+
+- Updated templates to have description in scorecard rules and pie charts (#1) 
+
+
+0.1.42 (2024-01-01)
+===================
+
+### Features
+
+- Added onboarding templates, including blueprints, scorecards, actions and pages (#1)
+
+### Improvements
+
+- Added special handling for project resync batch size to 10, to reduce the time it takes to show data in the UI (#3)
+
+
+0.1.41 (2024-01-01)
+===================
+
+### Improvements
+
+- Bumped ocean version to ^0.4.13 (#1)
+
+### Bug Fixes
+
+- Fixed handling not found error when trying to get tree for commit sha of newly created project (#1)
+
+
+v0.1.40 (2023-12-27)
+====================
+
+### Improvements
+
+- Increased log verbosity for gitlab webhook bootstrap (#2)
+- Added handling for fetching errors (PORT-5813)
+
+### Bug Fixes
+
+- Fixed 404 error when trying to get tree for commit sha of newly created project (#1)
+
+
 v0.1.39 (2023-12-25)
 ====================
 
 ### Improvements
 
-- Fix stale relation identifiers in default blueprints (port-5799)
+- Fix stale relation identifiers in default blueprints (PORT-5799)
 
 
 v0.1.38 (2023-12-24)

@@ -1,62 +1,102 @@
 import asyncio
 import typing
 from datetime import datetime, timedelta
+from itertools import islice
 from typing import Any
 
 from loguru import logger
 from starlette.requests import Request
-from port_ocean.context.event import event
 
-from gitlab_integration.bootstrap import event_handler, system_event_handler
-from gitlab_integration.bootstrap import setup_application
+from gitlab_integration.events.setup import event_handler, system_event_handler
+from gitlab_integration.models.webhook_groups_override_config import (
+    WebhookMappingConfig,
+)
+from gitlab_integration.events.setup import setup_application
 from gitlab_integration.git_integration import GitlabResourceConfig
 from gitlab_integration.utils import ObjectKind, get_cached_all_services
+from port_ocean.context.event import event
 from port_ocean.context.ocean import ocean
 from port_ocean.core.ocean_types import ASYNC_GENERATOR_RESYNC_TYPE
+from port_ocean.log.sensetive import sensitive_log_filter
 
 NO_WEBHOOK_WARNING = "Without setting up the webhook, the integration will not export live changes from the gitlab"
+PROJECT_RESYNC_BATCH_SIZE = 10
 
 
 @ocean.router.post("/hook/{group_id}")
-async def handle_webhook(group_id: str, request: Request) -> dict[str, Any]:
-    event_id = f'{request.headers.get("X-Gitlab-Event")}:{group_id}'
+async def handle_webhook_request(group_id: str, request: Request) -> dict[str, Any]:
+    event_id = f"{request.headers.get('X-Gitlab-Event')}:{group_id}"
     with logger.contextualize(event_id=event_id):
-        body = await request.json()
-        await event_handler.notify(event_id, body)
-        return {"ok": True}
+        try:
+            logger.debug(f"Received webhook event {event_id} from Gitlab")
+            body = await request.json()
+            await event_handler.notify(event_id, body)
+            return {"ok": True}
+        except Exception as e:
+            logger.exception(
+                f"Failed to handle webhook event {event_id} from Gitlab, error: {e}"
+            )
+            return {"ok": False, "error": str(e)}
 
 
 @ocean.router.post("/system/hook")
-async def handle_system_webhook(request: Request) -> dict[str, Any]:
-    body = await request.json()
-    # some system hooks have event_type instead of event_name in the body, such as merge_request events
-    event_name = body.get("event_name") or body.get("event_type")
-    with logger.contextualize(event_name=event_name):
-        logger.debug("Handling system hook")
-        await system_event_handler.notify(event_name, body)
+async def handle_system_webhook_request(request: Request) -> dict[str, Any]:
+    try:
+        body: dict[str, Any] = await request.json()
+        # some system hooks have event_type instead of event_name in the body, such as merge_request events
+        event_name: str = str(body.get("event_name") or body.get("event_type"))
+        with logger.contextualize(event_name=event_name):
+            logger.debug(f"Received system webhook event {event_name} from Gitlab")
+            await system_event_handler.notify(event_name, body)
+
         return {"ok": True}
+    except Exception as e:
+        logger.exception(
+            "Failed to handle system webhook event from Gitlab, error: {e}"
+        )
+        return {"ok": False, "error": str(e)}
 
 
 @ocean.on_start()
 async def on_start() -> None:
+    integration_config = ocean.integration_config
+    token_mapping: dict = integration_config["token_mapping"]
+    hook_override_mapping: dict = integration_config[
+        "token_group_hooks_override_mapping"
+    ]
+    sensitive_log_filter.hide_sensitive_strings(*token_mapping.keys())
+
+    if hook_override_mapping is not None:
+        sensitive_log_filter.hide_sensitive_strings(*hook_override_mapping.keys())
+
     if ocean.event_listener_type == "ONCE":
         logger.info("Skipping webhook creation because the event listener is ONCE")
         return
 
-    logic_settings = ocean.integration_config
-    if not logic_settings.get("app_host"):
+    if not integration_config.get("app_host"):
         logger.warning(
             f"No app host provided, skipping webhook creation. {NO_WEBHOOK_WARNING}"
         )
         return
 
+    token_webhook_mapping: WebhookMappingConfig | None = None
+
+    if integration_config["token_group_hooks_override_mapping"]:
+        token_webhook_mapping = WebhookMappingConfig(
+            tokens=integration_config["token_group_hooks_override_mapping"]
+        )
+
     try:
         setup_application(
-            logic_settings["token_mapping"],
-            logic_settings["gitlab_host"],
-            logic_settings["app_host"],
-            logic_settings["use_system_hook"],
+            integration_config["token_mapping"],
+            integration_config["gitlab_host"],
+            integration_config["app_host"],
+            integration_config["use_system_hook"],
+            token_webhook_mapping,
         )
+
+        await event_handler.start_event_processor()
+        await system_event_handler.start_event_processor()
     except Exception as e:
         logger.warning(
             f"Failed to setup webhook: {e}. {NO_WEBHOOK_WARNING}",
@@ -64,19 +104,39 @@ async def on_start() -> None:
         )
 
 
+@ocean.on_resync(ObjectKind.GROUP)
+async def resync_groups(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
+    for service in get_cached_all_services():
+        async for groups_batch in service.get_all_groups():
+            yield [group.asdict() for group in groups_batch]
+
+
 @ocean.on_resync(ObjectKind.PROJECT)
 async def on_resync(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
     for service in get_cached_all_services():
         masked_token = len(str(service.gitlab_client.private_token)[:-4]) * "*"
         logger.info(f"fetching projects for token {masked_token}")
-        async for projects_batch in service.get_all_projects():
-            logger.info(f"Fetching extras for {len(projects_batch)} projects")
-            tasks = []
-            for project in projects_batch:
-                tasks.append(service.enrich_project_with_extras(project))
-            projects = await asyncio.gather(*tasks)
-            logger.info(f"Finished fetching extras for {len(projects_batch)} projects")
-            yield projects
+        async for projects in service.get_all_projects():
+            # resync small batches of projects, so data will appear asap to the user.
+            # projects takes more time than other resources as it has extra enrichment performed for each entity
+            # such as languages, `file://` and `search://`
+            projects_batch_iter = iter(projects)
+            projects_processed_in_full_batch = 0
+            while projects_batch := tuple(
+                islice(projects_batch_iter, PROJECT_RESYNC_BATCH_SIZE)
+            ):
+                projects_processed_in_full_batch += len(projects_batch)
+                logger.info(
+                    f"Processing extras for {projects_processed_in_full_batch}/{len(projects)} projects in batch"
+                )
+                tasks = []
+                for project in projects_batch:
+                    tasks.append(service.enrich_project_with_extras(project))
+                enriched_projects = await asyncio.gather(*tasks)
+                logger.info(
+                    f"Finished Processing extras for {projects_processed_in_full_batch}/{len(projects)} projects in batch"
+                )
+                yield enriched_projects
 
 
 @ocean.on_resync(ObjectKind.FOLDER)
@@ -92,7 +152,9 @@ async def resync_folders(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
             for folder_selector in selector.folders:
                 for project in projects_batch:
                     if project.name in folder_selector.repos:
-                        async for folders_batch in service.get_all_folders_in_project_path(
+                        async for (
+                            folders_batch
+                        ) in service.get_all_folders_in_project_path(
                             project, folder_selector
                         ):
                             yield folders_batch

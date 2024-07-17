@@ -1,7 +1,8 @@
 import asyncio
 import sys
 import threading
-from typing import Callable, Any, Dict
+from contextlib import asynccontextmanager
+from typing import Callable, Any, Dict, AsyncIterator
 
 from fastapi import FastAPI, APIRouter
 from loguru import logger
@@ -18,8 +19,10 @@ from port_ocean.context.ocean import (
     initialize_port_ocean_context,
 )
 from port_ocean.core.integrations.base import BaseIntegration
+from port_ocean.log.sensetive import sensitive_log_filter
 from port_ocean.middlewares import request_handler
-from port_ocean.utils import repeat_every
+from port_ocean.utils.repeat import repeat_every
+from port_ocean.utils.signal import signal_handler, init_signal_handler
 from port_ocean.version import __integration_version__
 
 
@@ -39,10 +42,18 @@ class Ocean:
         self.config = IntegrationConfiguration(
             base_path="./", **(config_override or {})
         )
+
         if config_factory:
-            self.config.integration.config = config_factory(
-                **self.config.integration.config
-            ).dict()
+            raw_config = (
+                self.config.integration.config
+                if isinstance(self.config.integration.config, dict)
+                else self.config.integration.config.dict()
+            )
+            self.config.integration.config = config_factory(**raw_config)
+        # add the integration sensitive configuration to the sensitive patterns to mask out
+        sensitive_log_filter.hide_sensitive_strings(
+            *self.config.get_sensitive_fields_data()
+        )
         self.integration_router = integration_router or APIRouter()
 
         self.port_client = PortClient(
@@ -61,7 +72,6 @@ class Ocean:
         self,
     ) -> None:
         def execute_resync_all() -> None:
-            initialize_port_ocean_context(ocean_app=self)
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
@@ -84,13 +94,17 @@ class Ocean:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         self.fast_api_app.include_router(self.integration_router, prefix="/integration")
 
-        @self.fast_api_app.on_event("startup")
-        async def startup() -> None:
+        @asynccontextmanager
+        async def lifecycle(_: FastAPI) -> AsyncIterator[None]:
             try:
+                init_signal_handler()
                 await self.integration.start()
                 await self._setup_scheduled_resync()
-            except Exception as e:
-                logger.error(f"Failed to start integration with error: {e}")
+                yield None
+                signal_handler.exit()
+            except Exception:
+                logger.exception("Integration had a fatal error. Shutting down.")
                 sys.exit("Server stopped")
 
+        self.fast_api_app.router.lifespan_context = lifecycle
         await self.fast_api_app(scope, receive, send)

@@ -1,15 +1,16 @@
 from typing import Dict, Any, Tuple, List, Type
 
+from gitlab.v4.objects import Project
+from loguru import logger
+from pydantic import Field, BaseModel
+
+from gitlab_integration.core.async_fetcher import AsyncFetcher
 from gitlab_integration.core.entities import (
     FILE_PROPERTY_PREFIX,
     SEARCH_PROPERTY_PREFIX,
 )
-from loguru import logger
-from pydantic import Field, BaseModel
-from gitlab.v4.objects import Project
 from gitlab_integration.gitlab_service import PROJECTS_CACHE_KEY
 from gitlab_integration.utils import get_cached_all_services
-
 from port_ocean.context.event import event
 from port_ocean.core.handlers import JQEntityProcessor
 from port_ocean.core.handlers.port_app_config.models import (
@@ -22,7 +23,7 @@ from port_ocean.core.handlers.port_app_config.models import (
 class FileEntityProcessor(JQEntityProcessor):
     prefix = FILE_PROPERTY_PREFIX
 
-    def _search(self, data: Dict[str, Any], pattern: str) -> Any:
+    async def _search(self, data: Dict[str, Any], pattern: str) -> Any:
         project_id, ref, base_path = _validate_project_scope(data)
         project = _get_project_from_cache(project_id)
 
@@ -34,18 +35,15 @@ class FileEntityProcessor(JQEntityProcessor):
         logger.info(
             f"Searching for file {file_path} in Project {project_id}: {project.path_with_namespace}, ref {ref}"
         )
-        return (
-            project.files.get(file_path=file_path, ref=ref).decode().decode("utf-8")
-            if project
-            else None
-        )
+        res = await AsyncFetcher.fetch_single(project.files.get, file_path, ref)
+        return res.decode().decode("utf-8")
 
 
 class SearchEntityProcessor(JQEntityProcessor):
     prefix = SEARCH_PROPERTY_PREFIX
     separation_symbol = "&&"
 
-    def _search(self, data: Dict[str, Any], pattern: str) -> Any:
+    async def _search(self, data: Dict[str, Any], pattern: str) -> Any:
         """
         Handles entity mapping for search:// pattern
         :param data: project data
@@ -73,10 +71,10 @@ class SearchEntityProcessor(JQEntityProcessor):
                 # having the base path applies to the case where we export a folder as a monorepo
                 if base_path and "path:" not in query:
                     query = f"{query} path:{base_path}"
-                results = project.search(scope=scope, search=query)
+                results = await AsyncFetcher.fetch_single(project.search, scope, query)  # type: ignore
                 match = bool(results)
             else:
-                results = project.search(scope=scope, search=query)
+                results = await AsyncFetcher.fetch_single(project.search, scope, query)  # type: ignore
                 match = bool(results)
         return match
 
@@ -99,7 +97,7 @@ class SearchEntityProcessor(JQEntityProcessor):
 
 
 class GitManipulationHandler(JQEntityProcessor):
-    def _search(self, data: Dict[str, Any], pattern: str) -> Any:
+    async def _search(self, data: Dict[str, Any], pattern: str) -> Any:
         entity_processor: Type[JQEntityProcessor]
         if pattern.startswith(FILE_PROPERTY_PREFIX):
             entity_processor = FileEntityProcessor
@@ -107,7 +105,7 @@ class GitManipulationHandler(JQEntityProcessor):
             entity_processor = SearchEntityProcessor
         else:
             entity_processor = JQEntityProcessor
-        return entity_processor(self.context)._search(data, pattern)
+        return await entity_processor(self.context)._search(data, pattern)
 
 
 class FoldersSelector(BaseModel):
@@ -126,7 +124,7 @@ class GitlabResourceConfig(ResourceConfig):
 
 class GitlabPortAppConfig(PortAppConfig):
     spec_path: str | List[str] = Field(alias="specPath", default="**/port.yml")
-    branch: str = "main"
+    branch: str | None
     filter_owned_projects: bool | None = Field(
         alias="filterOwnedProjects", default=True
     )

@@ -1,0 +1,56 @@
+createMissingRelatedEntities: true
+deleteDependentEntities: true
+resources:
+  - kind: project
+    selector:
+      query: 'true'
+      defaultTeam: "true"
+    port:
+      entity:
+        mappings:
+          identifier: '.id | gsub(" "; "")'
+          blueprint: '"project"'
+          title: .name
+          properties:
+            state: '.state'
+            revision: '.revision'
+            visibility": '.visibility'
+            defaultTeam: '.defaultTeam.name'
+            link: '.url | gsub("_apis/projects/"; "")'
+
+  - kind: repository
+    selector:
+      query: "true"
+    port:
+      entity:
+        mappings:
+          identifier: '"\(.project.name | ascii_downcase | gsub(" "; ""))/\(.name | ascii_downcase | gsub(" "; ""))"'
+          blueprint: '"service"'
+          title: .name
+          properties:
+            url: '.remoteUrl'
+            readme: file://README.md
+          relations:
+            project: '.project.id | gsub(" "; "")'
+
+  - kind: repository-policy
+    selector:
+      query: '.type.displayName=="Minimum number of reviewers"'
+    port:
+      entity:
+        mappings:
+          identifier: '"\(.__repository.project.name | ascii_downcase | gsub(" "; ""))/\(.__repository.name | ascii_downcase | gsub(" "; ""))"'
+          blueprint: '"service"'
+          properties:
+            minimumApproverCount: '.settings.minimumApproverCount'
+
+  - kind: repository-policy
+    selector:
+      query: '.type.displayName=="Work item linking"'
+    port:
+      entity:
+        mappings:
+          identifier: '"\(.__repository.project.name | ascii_downcase | gsub(" "; ""))/\(.__repository.name | ascii_downcase | gsub(" "; ""))"'
+          blueprint: '"service"'
+          properties:
+            workItemLinking: '.isEnabled and .isBlocking'

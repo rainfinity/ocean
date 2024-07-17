@@ -7,6 +7,379 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 <!-- towncrier release notes start -->
 
+## 0.9.4 (2024-07-09)
+
+### Bug Fixes
+
+- Handle non existing config mapping for cases where the integration was created by SAAS and the config mapping was not set
+
+
+## 0.9.3 (2024-07-08)
+
+### Improvements
+
+- Added Ocean integration config to remove all environment variables from jq access
+- Added log for when receiving invalid port app config mapping
+
+## 0.9.2 (2024-07-05)
+
+### Improvements
+
+- Added log of the used integration mapping for each resync event
+- Added log when failed on processing jq mapping for raw result
+
+### Bug Fixes
+
+- Fixed an issue where raw results were not being sent if raw data didn't map to any entity
+
+
+## 0.9.1 (2024-06-23)
+
+
+### Bug Fixes
+
+- Safely get changelogDestination key instead of accessing it directly 
+
+
+## 0.9.0 (2024-06-19)
+
+
+### Features
+
+- Added validation of whether the integration can run in the desired runtime
+
+
+## 0.8.0 (2024-06-16)
+
+
+### Improvements
+
+- Add search relation support (Allow to to run a search query to find the relation to the entity as part of the mapping)
+
+
+## 0.7.1 (2024-06-13)
+
+
+### Bug Fixes
+
+- Fixed values unpack error in register_raw
+
+
+## 0.7.0 (2024-06-13)
+
+
+### Improvements
+
+- Added pydantic's dotenv extra to the core dependencies for reading .env files on the integration startup
+- Added .python-version to the repository for easier setup with pyenv install
+
+
+## 0.6.0 (2024-06-10)
+
+
+### Improvements
+
+- Changed initialization to always apply default mapping if no other mapping is configured
+
+
+## 0.5.27 (2024-06-05)
+
+
+### Bug Fixes
+
+- Fixed incorrect pydantic validation over the integration settings
+
+
+## 0.5.26 (2024-06-04)
+
+
+### Bug Fixes
+
+- Fixed an issue causing integrations with no configuration to fail during the initialization process
+
+
+## 0.5.25 (2024-06-03)
+
+
+### Bug Fixes
+
+- Fixed faulty error handling caused by gather_and_split_errors_from_results raising errors that are not directly under BaseException (#1)
+
+
+## 0.5.24 (2024-06-02)
+
+
+### Improvements
+
+- Improved exception propagation for the entity processing (#1)
+- QOL utility (`core.utils.gather_and_split_errors_from_results`) for when calling `asyncio.gather` with the `return_exceptions` parameter set to `True` and there is need for separating the errors from the data itself (#2)
+
+### Bug Fixes
+
+- Fixed unhandled exceptions caused by the entity parsing, resulting in the integration freezing (#1)
+
+
+## 0.5.23 (2024-05-30)
+
+### Improvements
+
+- Updated the base image used in the Dockerfile that is created during integration scaffolding from `python:3.11-slim-buster` to `python:3.11-slim-bookworm`
+
+## 0.5.22 (2024-05-29)
+
+### Bug Fixes
+
+- Fixed an issue in `send_raw_data_examples` when there are slashes in integration kind
+
+
+## 0.5.21 (2024-05-26)
+
+### Features
+
+- Added `send_raw_data_examples` integration config to allow sending raw data examples from the third party API to port (on resync), for testing and managing the integration mapping
+
+
+## 0.5.20 (2024-05-26)
+
+
+### Improvements
+
+- Made config.yaml file optional in the integration setup process.
+- Integration type is now determined by the name specified in the pyproject.toml file.
+- Switched to using the FastAPI lifespan feature instead of the deprecated on_shutdown and on_start methods.
+
+### Bug Fixes
+
+- Fixed the FastAPI server staying stale after shutdown by using the FastAPI lifespan feature for handling shutdown signals, preventing override of the shutdown process.
+- Fixed issue with integration continuing to run after shutdown by canceling the resync async generator task.
+
+
+## 0.5.19 (2024-05-16)
+
+### Improvements
+
+- Added caching to port-app-config.yml retrieval from port api (only for live events)
+
+
+## 0.5.18 (2024-05-12)
+
+### Improvements
+
+- Added a util function that allows to run multiple asynchronous tasks in a bounded way to prevent overload and memory issues
+- Use that utility when calculating JQ mapping for raw entities
+
+
+
+## 0.5.17 (2024-05-01)
+
+### Bug Fixes
+
+- Fixed an issue in creating a child event context from the parent context by removing an unnecessary line of code
+
+
+
+## 0.5.16 (2024-05-01)
+
+### Features
+
+- Allowing override of parent event context in ocean's event context manager
+
+
+## 0.5.15 (2024-04-30)
+
+### Bug Fixes
+
+- Fixed error in `register_raw` when there's no relevant mappings for a specific kind
+
+
+## 0.5.14 (2024-04-24)
+
+### Improvements
+
+- Implemented real-time entity deletion exclusively for instances that haven't matched any selectors.
+- Change the JQ calculation to process only identifier and blueprint for raw entities not selected during real-time events to only get the required data for the delete.
+
+## 0.5.13 (2024-04-17)
+
+### Features
+
+- Delete entities that doesn't passed the selector on real time events
+
+
+## 0.5.12 (2024-04-12)
+
+### Features
+
+- Added a util function that allows to iterate over a list of async iterators and stream the results of each iterator as they are available
+
+
+## 0.5.11 (2024-04-11)
+
+
+### Improvements
+
+- Improved the handling of integration entities by adding retries and running it after the upsert to prevent blocking the resync
+- Changed entities search timeout to 30 seconds to prevent blocking the resync
+
+### Features
+
+- Added a way to enable request retries for any request even if its request method is not part of the retryable methods
+
+
+## 0.5.10 (2024-04-10)
+
+### Bug Fixes
+
+- Fixed application settings to be loaded from the environment variables
+
+### Improvements
+
+- Added integration version label to docker
+
+
+## 0.5.9 (2024-03-30)
+
+### Bug Fixes
+
+- Fixed a bug where every time after the first token expiration, the framework didn't actually marked that the token got refreshed, causing the token to be refreshed every time when a request is made to Port. (#1)
+
+
+## 0.5.8 (2024-03-27)
+
+
+### Bug Fixes
+
+- Fixed a bug in loguru which fails to deserialize an exceptions (#1)
+
+
+## 0.5.7 (2024-03-20)
+
+
+### Features
+
+- Added the ability to map entities from raw array attributes by introducing `itemsToParse` key in the mapping configuration
+
+
+## 0.5.6 (2024-03-17)
+
+
+### Features
+
+- Added array to possible integration configuration types (PORT-7262)
+
+
+## 0.5.5 (2024-03-06)
+
+
+### Bug Fixes
+
+- Changed caching to detect changes in params of function (#1)
+
+
+## 0.5.4 (2024-03-03)
+
+
+### Bug Fixes
+
+- Fixed an issue where a failure in the entity processing step might fail the whole resync (#1)
+
+
+## 0.5.3 (2024-03-03)
+
+
+### Improvements
+
+- Cahnged the JQ Entity processor to work with async callss to allow better parallelism and async work (#1)
+
+
+## 0.5.2 (2024-02-21)
+
+
+### Bug Fixes
+
+- Fixed an issue causing the integration to crash when passing a sensitive configuration with invalid regex characters due to a missing escaping (PORT-6836)
+
+
+## 0.5.1 (2024-02-20)
+
+
+### Features
+
+- Added handling for kafka consumer empty partition assignment and shutting the application down with an error (PORT-5475)
+- Added QOL decorator to help with caching the third party response (PORT-5475_2)
+
+### Improvements
+
+- Changed the Kafka consumer to run in the event loop in async instead of sync in another thread (PORT-5475)
+
+### Bug Fixes
+
+- Fixed an issue causing all the character to be redacted when passing empty string to a sensitive field
+
+
+## 0.5.0 (2024-02-18)
+
+
+### Features
+
+- Added a method for ocean integration to redact sensitive information from the logs and automatically apply it to sensitive configurations and known sensitive patterns. (#1)
+- Added an HTTP handler for Ocean logs to facilitate sending the logs to the Port. (#2)
+
+### Improvements
+
+- Seperated the `port_ocean.utils` file into multiple files within the `utils` folder to improve code organization. (#1)
+- Changed the Ocean context to be a global variable instead of using Localstack, preventing the framework from re-initiating the context for each thread. (#2)
+
+### Bug Fixes
+
+- Fixed an issue where the event listener was causing the application to continue running even after receiving a termination signal. (#1)
+- Fixed a bug that caused some termination signal handlers to not work by consolidating the signal listeners in a single class, as signals can only have one listener. (#2)
+
+
+## 0.4.17 (2024-01-23)
+
+
+### Features
+
+- Added sonarcloud files for public integration scaffolding (PORT-6181)
+- Replaced the `remove-docker` option from the `ocean new` cli with `private` & `public` flags (PORT-6181)
+
+
+## 0.4.16 (2024-01-11)
+
+
+### Improvements
+
+- Increased the default timeout for requests to 3rd party targets to 30 seconds, and made it configurable (PORT-6074)
+
+
+## 0.4.15 (2024-01-07)
+
+
+### Bug Fixes
+
+- Fixed issue causing app config with no team mapping to fail due the core using None when not set (PORT-5938)
+
+
+## 0.4.14 (2024-01-07)
+
+
+### Bug Fixes
+
+- Fixed missing team parameter in the port app config model (PORT-5938)
+
+
+## 0.4.13 (2023-12-31)
+
+### Features
+
+- Added capability to create pages as part of the integration setup (PORT-5689)
+
+### Improvements
+
+- Added integration and blueprints existence check before creating default resources (#1)
+- Added verbosity to diff deletion process after resync (#2)
+
 ## 0.4.12 (2023-12-22)
 
 

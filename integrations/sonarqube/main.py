@@ -1,16 +1,11 @@
 from typing import Any
-
 from loguru import logger
 
 from client import SonarQubeClient
 from port_ocean.context.ocean import ocean
 from port_ocean.core.ocean_types import ASYNC_GENERATOR_RESYNC_TYPE
 
-
-class ObjectKind:
-    PROJECTS = "projects"
-    ISSUES = "issues"
-    ANALYSIS = "analysis"
+from integration import ObjectKind
 
 
 def init_sonar_client() -> SonarQubeClient:
@@ -19,43 +14,41 @@ def init_sonar_client() -> SonarQubeClient:
         ocean.integration_config["sonar_api_token"],
         ocean.integration_config.get("sonar_organization_id"),
         ocean.integration_config.get("app_host"),
+        ocean.integration_config["sonar_is_on_premise"],
     )
 
 
-def is_onpremise_deployment() -> bool:
-    return ocean.integration_config.get("sonar_url") != "https://sonarcloud.io"
-
-
 @ocean.on_resync(ObjectKind.PROJECTS)
-async def on_project_resync(kind: str) -> list[dict[str, Any]]:
+async def on_project_resync(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
     logger.info(f"Listing Sonarqube resource: {kind}")
+
     sonar_client = init_sonar_client()
-    return await sonar_client.get_all_projects()
+    async for project_list in sonar_client.get_all_projects():
+        yield project_list
 
 
 @ocean.on_resync(ObjectKind.ISSUES)
 async def on_issues_resync(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
-    logger.info(f"Listing Sonarqube resource: {kind}")
     sonar_client = init_sonar_client()
     async for issues_list in sonar_client.get_all_issues():
-        for issue in issues_list:
-            yield [issue]
+        yield issues_list
 
 
 @ocean.on_resync(ObjectKind.ANALYSIS)
-async def on_analysis_resync(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
-    logger.info(f"Listing Sonarqube resource: {kind}")
-    if is_onpremise_deployment():
-        logger.debug(
-            "Skipping resync because the integration does not support on-premise Sonarqube deployment"
-        )
-        return
-
+@ocean.on_resync(ObjectKind.SASS_ANALYSIS)
+async def on_saas_analysis_resync(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
     sonar_client = init_sonar_client()
+    if not ocean.integration_config["sonar_is_on_premise"]:
+        async for analyses_list in sonar_client.get_all_sonarcloud_analyses():
+            yield analyses_list
 
-    async for analyses_list in sonar_client.get_all_analyses():
-        for analysis_data in analyses_list:
-            yield [analysis_data]
+
+@ocean.on_resync(ObjectKind.ONPREM_ANALYSIS)
+async def on_onprem_analysis_resync(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
+    sonar_client = init_sonar_client()
+    if ocean.integration_config["sonar_is_on_premise"]:
+        async for analyses_list in sonar_client.get_all_sonarqube_analyses():
+            yield analyses_list
 
 
 @ocean.router.post("/webhook")
@@ -73,14 +66,17 @@ async def handle_sonarqube_webhook(webhook_data: dict[str, Any]) -> None:
     await ocean.register_raw(ObjectKind.PROJECTS, [project_data])
     await ocean.register_raw(ObjectKind.ISSUES, issues_data)
 
-    if is_onpremise_deployment():
-        logger.debug(
-            "Skipping real-time update of analysis because the integration does not support on-premise Sonarqube deployment"
+    if ocean.integration_config["sonar_is_on_premise"]:
+        onprem_analysis_data = await sonar_client.get_measures_for_all_pull_requests(
+            project_key=project["key"]
         )
-        return
-
-    analysis_data = await sonar_client.get_analysis_for_task(webhook_data=webhook_data)
-    await ocean.register_raw(ObjectKind.ANALYSIS, [analysis_data])
+        await ocean.register_raw(ObjectKind.ONPREM_ANALYSIS, onprem_analysis_data)
+    else:
+        cloud_analysis_data = await sonar_client.get_analysis_for_task(
+            webhook_data=webhook_data
+        )
+        await ocean.register_raw(ObjectKind.SASS_ANALYSIS, [cloud_analysis_data])
+        await ocean.register_raw(ObjectKind.ANALYSIS, [cloud_analysis_data])
 
     logger.info("Webhook event processed")
 
@@ -88,11 +84,10 @@ async def handle_sonarqube_webhook(webhook_data: dict[str, Any]) -> None:
 @ocean.on_start()
 async def on_start() -> None:
     if not ocean.integration_config.get("sonar_organization_id"):
-        if not is_onpremise_deployment():
+        if not ocean.integration_config["sonar_is_on_premise"]:
             raise ValueError(
                 "Organization ID is required for SonarCloud. Please specify a valid sonarOrganizationId"
             )
-        logger.warning("Organization key is missing for an on-premise Sonarqube setup")
 
     sonar_client = init_sonar_client()
     sonar_client.sanity_check()

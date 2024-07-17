@@ -1,7 +1,7 @@
-from typing import Any
 from loguru import logger
 from port_ocean.context.ocean import ocean
-from client import ArgocdClient, ObjectKind
+from port_ocean.core.ocean_types import RAW_RESULT, ASYNC_GENERATOR_RESYNC_TYPE
+from client import ArgocdClient, ObjectKind, ResourceKindsWithSpecialHandling
 from fastapi import Request
 
 
@@ -13,15 +13,50 @@ def init_client() -> ArgocdClient:
 
 
 @ocean.on_resync()
-async def on_resources_resync(kind: str) -> list[dict[Any, Any]]:
-    logger.info(f"Listing ArgoCD resource: {kind}")
+async def on_resources_resync(kind: str) -> RAW_RESULT:
+    if kind in iter(ResourceKindsWithSpecialHandling):
+        logger.info(f"Kind {kind} has a special handling. Skipping...")
+        return []
+    else:
+        argocd_client = init_client()
+        return await argocd_client.get_resources(resource_kind=ObjectKind(kind))
+
+
+@ocean.on_resync(kind=ResourceKindsWithSpecialHandling.DEPLOYMENT_HISTORY)
+async def on_history_resync(kind: str) -> RAW_RESULT:
     argocd_client = init_client()
 
-    try:
-        return await argocd_client.get_resources(resource_kind=ObjectKind(kind))
-    except ValueError:
-        logger.error(f"Invalid resource kind: {kind}")
-        raise
+    return await argocd_client.get_deployment_history()
+
+
+@ocean.on_resync(kind=ResourceKindsWithSpecialHandling.KUBERNETES_RESOURCE)
+async def on_managed_k8s_resources_resync(kind: str) -> RAW_RESULT:
+    argocd_client = init_client()
+
+    return await argocd_client.get_kubernetes_resource()
+
+
+@ocean.on_resync(kind=ResourceKindsWithSpecialHandling.MANAGED_RESOURCE)
+async def on_managed_resources_resync(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
+    argocd_client = init_client()
+
+    applications = await argocd_client.get_resources(
+        resource_kind=ObjectKind.APPLICATION
+    )
+    for application in applications:
+        managed_resources = await argocd_client.get_managed_resources(
+            application_name=application["metadata"]["name"]
+        )
+        # TODO: Remove __applicationId in the future version
+        application_resource = [
+            {
+                **managed_resource,
+                "__application": application,
+                "__applicationId": application["metadata"]["uid"],
+            }
+            for managed_resource in managed_resources
+        ]
+        yield application_resource
 
 
 @ocean.router.post("/webhook")

@@ -7,6 +7,370 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+# Port_Ocean 0.1.79 (2024-07-10)
+
+### Improvements
+
+- Added the primary oncall user to the escalation policy blueprint
+
+
+# Port_Ocean 0.1.78 (2024-07-10)
+
+### Improvements
+
+- Bumped ocean version to ^0.9.4 (#1)
+
+
+# Port_Ocean 0.1.77 (2024-07-09)
+
+### Improvements
+
+- Bumped ocean version to ^0.9.3 (#1)
+
+
+# Port_Ocean 0.1.76 (2024-07-07)
+
+### Improvements
+
+- Bumped ocean version to ^0.9.2 (#1)
+
+
+# Port_Ocean 0.1.75 (2024-07-05)
+
+### Improvements
+
+- Added support for escalation policies
+
+
+# Port_Ocean 0.1.74 (2024-06-25)
+
+### Features
+
+- Added secondary on call user to PagerDuty Service (0.1.74)
+
+### Improvements
+
+- Oncall user is calculated dynamically based on escalation levels (0.1.74)
+
+
+# Port_Ocean 0.1.73 (2024-06-23)
+
+### Improvements
+
+- Bumped ocean version to ^0.9.1 (#1)
+
+
+# Port_Ocean 0.1.72 (2024-06-19)
+
+### Improvements
+
+- Bumped ocean version to ^0.9.0 (#1)
+
+
+# Port_Ocean 0.1.71 (2024-06-16)
+
+### Improvements
+
+- Bumped ocean version to ^0.8.0 (#1)
+
+
+# Port_Ocean 0.1.70 (2024-06-13)
+
+### Improvements
+
+- Bumped ocean version to ^0.7.1 (#1)
+
+
+# Port_Ocean 0.1.69 (2024-06-13)
+
+### Improvements
+
+- Bumped ocean version to ^0.7.0 (#1)
+
+
+# Port_Ocean 0.1.68 (2024-06-10)
+
+### Improvements
+
+- Bumped ocean version to ^0.6.0 (#1)
+
+
+# Port_Ocean 0.1.67 (2024-06-05)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.27 (#1)
+
+
+# Port_Ocean 0.1.66 (2024-06-03)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.25 (#1)
+
+
+# Port_Ocean 0.1.65 (2024-06-02)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.24 (#1)
+
+
+# Port_Ocean 0.1.64 (2024-05-30)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.23 (#1)
+- Updated the base image used in the Dockerfile that is created during integration scaffolding from `python:3.11-slim-buster` to `python:3.11-slim-bookworm`
+
+
+# Port_Ocean 0.1.63 (2024-05-29)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.22 (#1)
+
+
+# Port_Ocean 0.1.62 (2024-05-26)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.21 (#1)
+
+
+# Port_Ocean 0.1.61 (2024-05-26)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.20 (#1)
+- Removed the config.yaml file due to unused overrides
+
+
+# Port_Ocean 0.1.60 (2024-05-23)
+
+### Improvements
+
+- Updated the assignees and user properties from type string to email
+
+
+# Port_Ocean 0.1.59 (2024-05-17)
+
+### Improvements
+
+- Added escalation levels to the service blueprint
+
+
+# Port_Ocean 0.1.58 (2024-05-16)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.19 (#1)
+
+
+# Port_Ocean 0.1.57 (2024-05-13)
+
+### Improvements
+
+- Added priority and description properties to the incident blueprint
+- Updated incident status and urgency to have colored meaning
+
+
+# Port_Ocean 0.1.56 (2024-05-12)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.18 (#1)
+
+
+# Port_Ocean 0.1.55 (2024-05-01)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.17 (#1)
+
+
+# Port_Ocean 0.1.54 (2024-05-01)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.16 (#1)
+
+
+# Port_Ocean 0.1.53 (2024-04-30)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.15 (#1)
+
+
+# Port_Ocean 0.1.52 (2024-04-26)
+
+### Improvements
+
+- Updated the who is oncall for a service to map the first escalation level
+
+
+# Port_Ocean 0.1.51 (2024-04-24)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.14 (#1)
+
+
+# Port_Ocean 0.1.50 (2024-04-17)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.12 (#1)
+
+
+# Port_Ocean 0.1.49 (2024-04-11)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.11 (#1)
+
+
+# Port_Ocean 0.1.48 (2024-04-10)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.10 (#1)
+
+
+# Port_Ocean 0.1.47 (2024-04-01)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.9 (#1)
+
+
+# Port_Ocean 0.1.46 (2024-03-28)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.8 (#1)
+
+
+# Port_Ocean 0.1.45 (2024-03-20)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.7 (#1)
+
+
+# Port_Ocean 0.1.44 (2024-03-19)
+
+### Improvements
+
+- Updated the format for properties in the default blueprints
+
+
+# Port_Ocean 0.1.43 (2024-03-17)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.6 (#1)
+
+
+# Port_Ocean 0.1.42 (2024-03-08)
+
+### Improvements
+
+- Added support for Pagerduty oncall schedules, allowing the user to see who is oncall over a period of time (PORT-6981)
+
+
+# Port_Ocean 0.1.41 (2024-03-06)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.5 (#1)
+
+
+# Port_Ocean 0.1.40 (2024-03-03)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.4 (#1)
+
+
+# Port_Ocean 0.1.39 (2024-03-03)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.3 (#1)
+
+
+# Port_Ocean 0.1.38 (2024-02-21)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.2 (#1)
+
+
+# Port_Ocean 0.1.37 (2024-02-20)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.1 (#1)
+
+
+# Port_Ocean 0.1.36 (2024-02-18)
+
+### Improvements
+
+- Bumped ocean version to ^0.5.0 (#1)
+
+
+# Port_Ocean 0.1.35 (2024-02-12)
+
+### Features
+
+- Improved on the PagerDuty service blueprint by adding analytics data (PORT-6598)
+
+
+# Port_Ocean 0.1.34 (2024-01-26)
+
+### Features
+
+- Improved on the PagerDuty incident blueprint by adding analytics data
+
+
+# Port_Ocean 0.1.33 (2024-01-23)
+
+### Improvements
+
+- Bumped ocean version to ^0.4.17 (#1)
+
+
+# Port_Ocean 0.1.32 (2024-01-11)
+
+### Improvements
+
+- Bumped ocean version to ^0.4.16 (#1)
+
+
+# Port_Ocean 0.1.31 (2024-01-07)
+
+### Improvements
+
+- Bumped ocean version to ^0.4.15 (#1)
+
+
+# Port_Ocean 0.1.30 (2024-01-07)
+
+### Improvements
+
+- Bumped ocean version to ^0.4.14 (#1)
+
+
+# Port_Ocean 0.1.29 (2024-01-01)
+
+### Improvements
+
+- Bumped ocean version to ^0.4.13 (#1)
+
+
 # Port_Ocean 0.1.28 (2023-12-24)
 
 ### Improvements
