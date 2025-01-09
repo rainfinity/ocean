@@ -1,4 +1,5 @@
 import asyncio
+from graphlib import CycleError
 import inspect
 import typing
 from typing import Callable, Awaitable, Any
@@ -27,7 +28,7 @@ from port_ocean.core.ocean_types import (
     RAW_ITEM,
     CalculationResult,
 )
-from port_ocean.core.utils import zip_and_sum, gather_and_split_errors_from_results
+from port_ocean.core.utils.utils import zip_and_sum, gather_and_split_errors_from_results
 from port_ocean.exceptions.core import OceanAbortException
 
 SEND_RAW_DATA_EXAMPLES_AMOUNT = 5
@@ -140,11 +141,14 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
         objects_diff = await self._calculate_raw(
             [(resource, results)], parse_all, send_raw_data_examples_amount
         )
-        await self.entities_state_applier.upsert(
+        modified_objects = await self.entities_state_applier.upsert(
             objects_diff[0].entity_selector_diff.passed, user_agent_type
         )
-
-        return objects_diff[0]
+        return CalculationResult(
+            objects_diff[0].entity_selector_diff._replace(passed=modified_objects),
+            errors=objects_diff[0].errors,
+            misonfigured_entity_keys=objects_diff[0].misonfigured_entity_keys,
+        )
 
     async def _unregister_resource_raw(
         self,
@@ -152,8 +156,14 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
         results: list[RAW_ITEM],
         user_agent_type: UserAgentType,
     ) -> tuple[list[Entity], list[Exception]]:
+        if resource.port.entity.mappings.is_using_search_identifier:
+            logger.info(
+                f"Skip unregistering resource of kind {resource.kind}, as mapping defined with search identifier"
+            )
+            return [], []
+
         objects_diff = await self._calculate_raw([(resource, results)])
-        entities_selector_diff, errors = objects_diff[0]
+        entities_selector_diff, errors, _ = objects_diff[0]
 
         await self.entities_state_applier.delete(
             entities_selector_diff.passed, user_agent_type
@@ -176,7 +186,7 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
         send_raw_data_examples_amount = (
             SEND_RAW_DATA_EXAMPLES_AMOUNT if ocean.config.send_raw_data_examples else 0
         )
-        all_entities, register_errors = await self._register_resource_raw(
+        all_entities, register_errors,_ = await self._register_resource_raw(
             resource_config,
             raw_results,
             user_agent_type,
@@ -193,7 +203,7 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
                             0, send_raw_data_examples_amount - len(passed_entities)
                         )
 
-                    entities, register_errors = await self._register_resource_raw(
+                    entities, register_errors,_ = await self._register_resource_raw(
                         resource_config,
                         items,
                         user_agent_type,
@@ -236,7 +246,7 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
         if not resource_mappings:
             return []
 
-        diffs, errors = zip(
+        diffs, errors, misconfigured_entity_keys = zip(
             *await asyncio.gather(
                 *(
                     self._register_resource_raw(
@@ -249,6 +259,8 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
 
         diffs = list(diffs)
         errors = sum(errors, [])
+        misconfigured_entity_keys = list(misconfigured_entity_keys)
+
 
         if errors:
             message = f"Failed to register {len(errors)} entities. Skipping delete phase due to incomplete state"
@@ -270,7 +282,8 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
                 [
                     entity
                     for entity in entities_to_delete
-                    if (entity.identifier, entity.blueprint)
+                    if not entity.is_using_search_identifier
+                    and (entity.identifier, entity.blueprint)
                     not in registered_entities_attributes
                 ],
             )
@@ -311,10 +324,12 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
             resource for resource in config.resources if resource.kind == kind
         ]
 
-        entities, errors = await asyncio.gather(
-            *(
-                self._unregister_resource_raw(resource, results, user_agent_type)
-                for resource in resource_mappings
+        entities, errors = zip_and_sum(
+            await asyncio.gather(
+                *(
+                    self._unregister_resource_raw(resource, results, user_agent_type)
+                    for resource in resource_mappings
+                )
             )
         )
 
@@ -385,7 +400,20 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
                 {"before": entities_before_flatten, "after": entities_after_flatten},
                 user_agent_type,
             )
+    async def sort_and_upsert_failed_entities(self,user_agent_type: UserAgentType)->None:
+        try:
+            if not event.entity_topological_sorter.should_execute():
+                return None
+            logger.info(f"Executings topological sort of {event.entity_topological_sorter.get_entities_count()} entities failed to upsert.",failed_toupsert_entities_count=event.entity_topological_sorter.get_entities_count())
 
+            for entity in event.entity_topological_sorter.get_entities():
+                await self.entities_state_applier.context.port_client.upsert_entity(entity,event.port_app_config.get_port_request_options(),user_agent_type,should_raise=False)
+
+        except OceanAbortException as ocean_abort:
+            logger.info(f"Failed topological sort of failed to upsert entites - trying to upsert unordered {event.entity_topological_sorter.get_entities_count()} entities.",failed_topological_sort_entities_count=event.entity_topological_sorter.get_entities_count() )
+            if isinstance(ocean_abort.__cause__,CycleError):
+                for entity in event.entity_topological_sorter.get_entities(False):
+                    await self.entities_state_applier.context.port_client.upsert_entity(entity,event.port_app_config.get_port_request_options(),user_agent_type,should_raise=False)
     async def sync_raw_all(
         self,
         _: dict[Any, Any] | None = None,
@@ -415,7 +443,9 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
                 use_cache=False
             )
             logger.info(f"Resync will use the following mappings: {app_config.dict()}")
+
             try:
+                did_fetched_current_state = True
                 entities_at_port = await ocean.port_client.search_entities(
                     user_agent_type
                 )
@@ -427,7 +457,7 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
                     f"Response status code: {e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None}\n"
                     f"Response content: {e.response.text if isinstance(e, httpx.HTTPStatusError) else None}\n"
                 )
-                entities_at_port = []
+                did_fetched_current_state = False
 
             creation_results: list[tuple[list[Entity], list[Exception]]] = []
 
@@ -443,10 +473,13 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
                         event.on_abort(lambda: task.cancel())
 
                         creation_results.append(await task)
+
+                await self.sort_and_upsert_failed_entities(user_agent_type)
             except asyncio.CancelledError as e:
-                logger.warning("Resync aborted successfully")
+                logger.warning("Resync aborted successfully, skipping delete phase. This leads to an incomplete state")
+                raise
             else:
-                if not entities_at_port:
+                if not did_fetched_current_state:
                     logger.warning(
                         "Due to an error before the resync, the previous state of entities at Port is unknown."
                         " Skipping delete phase due to unknown initial state."
@@ -477,3 +510,4 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
                         {"before": entities_at_port, "after": flat_created_entities},
                         user_agent_type,
                     )
+                    logger.info("Resync finished successfully")

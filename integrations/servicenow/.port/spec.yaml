@@ -1,4 +1,5 @@
-description: Servicenow integration for Port Ocean
+title: ServiceNow
+description: ServiceNow integration for Port Ocean
 icon: Servicenow  # Should be one of the available icons in Port
 docs: https://docs.getport.io/build-your-software-catalog/sync-data-to-catalog/incident-management/servicenow
 features:
@@ -17,9 +18,9 @@ configurations:
     required: true
     type: string
     sensitive: false
-    description: The username of the ServiceNow account. To create user credentials, see the <a href="https://developer.servicenow.com/dev.do#!/learn/learning-plans/washingtondc/servicenow_application_developer/app_store_learnv2_rest_washingtondc_creating_credentials">ServiceNow documentation</a>
+    description: The username of the ServiceNow account. To create user credentials, see the <a href="https://developer.servicenow.com/dev.do#!/learn/learning-plans/washingtondc/servicenow_application_developer/app_store_learnv2_rest_washingtondc_creating_credentials" target="_blank">ServiceNow documentation</a>
   - name: servicenowPassword
     required: true
     type: string
     sensitive: true
-    description: The password of the ServiceNow account. To create user credentials, see the <a href="https://developer.servicenow.com/dev.do#!/learn/learning-plans/washingtondc/servicenow_application_developer/app_store_learnv2_rest_washingtondc_creating_credentials">ServiceNow documentation</a>
+    description: The password of the ServiceNow account. To create user credentials, see the <a href="https://developer.servicenow.com/dev.do#!/learn/learning-plans/washingtondc/servicenow_application_developer/app_store_learnv2_rest_washingtondc_creating_credentials" target="_blank">ServiceNow documentation</a>

@@ -1,5 +1,144 @@
 [
   {
+    "identifier": "opsGenieUser",
+    "description": "This blueprint represents an OpsGenie user in our software catalog",
+    "title": "OpsGenie User",
+    "icon": "OpsGenie",
+    "schema": {
+      "properties": {
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "title": "Email",
+          "format": "user"
+        },
+        "address": {
+          "type": "object",
+          "title": "Address"
+        },
+        "timeZone": {
+          "type": "string",
+          "title": "Time Zone"
+        },
+        "isVerified": {
+          "type": "boolean",
+          "title": "Is Verified"
+        },
+        "isBlocked": {
+          "type": "boolean",
+          "title": "Is Blocked"
+        },
+        "createdAt": {
+          "type": "string",
+          "title": "Created At",
+          "format": "date-time"
+        }
+      },
+      "required": []
+    },
+    "mirrorProperties": {},
+    "calculationProperties": {},
+    "aggregationProperties": {},
+    "relations": {}
+  },
+  {
+    "identifier": "opsGenieTeam",
+    "description": "This blueprint represents an OpsGenie team in our software catalog",
+    "title": "OpsGenie Team",
+    "icon": "OpsGenie",
+    "schema": {
+      "properties": {
+        "description": {
+          "type": "string",
+          "title": "Description",
+          "icon": "DefaultProperty"
+        },
+        "url": {
+          "title": "URL",
+          "type": "string",
+          "description": "URL to the service",
+          "format": "url",
+          "icon": "DefaultProperty"
+        },
+        "oncallUsers": {
+          "type": "array",
+          "title": "Current Oncalls",
+          "items": {
+            "type": "string",
+            "format": "user"
+          }
+        }
+      },
+      "required": []
+    },
+    "mirrorProperties": {},
+    "calculationProperties": {},
+    "aggregationProperties": {},
+    "relations": {
+      "members": {
+        "title": "Members",
+        "target": "opsGenieUser",
+        "required": false,
+        "many": true
+      }
+    }
+  },
+  {
+    "identifier": "opsGenieSchedule",
+    "description": "This blueprint represents a OpsGenie schedule in our software catalog",
+    "title": "OpsGenie Schedule",
+    "icon": "OpsGenie",
+    "schema": {
+      "properties": {
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "users": {
+          "title": "Users",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "user"
+          }
+        },
+        "startDate": {
+          "title": "Start Date",
+          "type": "string",
+          "format": "date-time"
+        },
+        "endDate": {
+          "title": "End Date",
+          "type": "string",
+          "format": "date-time"
+        },
+        "rotationType": {
+          "type": "string",
+          "title": "Rotation Type"
+        }
+      },
+      "required": []
+    },
+    "mirrorProperties": {},
+    "calculationProperties": {},
+    "aggregationProperties": {},
+    "relations": {
+      "ownerTeam": {
+        "title": "Owner Team",
+        "target": "opsGenieTeam",
+        "required": false,
+        "many": false
+      }
+    }
+  },
+  {
     "identifier": "opsGenieService",
     "description": "This blueprint represents an OpsGenie service in our software catalog",
     "title": "OpsGenie Service",
@@ -25,45 +164,17 @@
           },
           "title": "Tags",
           "icon": "DefaultProperty"
-        },
-        "oncallTeam": {
-          "type": "string",
-          "title": "OnCall Team",
-          "description": "Name of the team responsible for this service",
-          "icon": "DefaultProperty"
-        },
-        "teamMembers": {
-          "icon": "TwoUsers",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "user"
-          },
-          "title": "Team Members",
-          "description": "Members of team responsible for this service"
-        },
-        "oncallUsers": {
-          "icon": "TwoUsers",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "user"
-          },
-          "title": "Oncall Users",
-          "description": "Who is on call for this service"
         }
       },
       "required": []
     },
-    "mirrorProperties": {},
-    "calculationProperties": {
-      "teamSize": {
-        "title": "Team Size",
-        "icon": "DefaultProperty",
-        "description": "Size of the team",
-        "calculation": ".properties.teamMembers | length",
-        "type": "number"
+    "mirrorProperties": {
+      "oncallUsers": {
+        "title": "Current Oncalls",
+        "path": "ownerTeam.oncallUsers"
       }
+    },
+    "calculationProperties": {
     },
     "aggregationProperties": {
       "numberOfOpenIncidents": {
@@ -86,7 +197,14 @@
         }
       }
     },
-    "relations": {}
+    "relations": {
+      "ownerTeam": {
+        "title": "Owner Team",
+        "target": "opsGenieTeam",
+        "required": false,
+        "many": false
+      }
+    }
   },
   {
     "identifier": "opsGenieIncident",
@@ -126,11 +244,6 @@
           },
           "title": "Tags"
         },
-        "responders": {
-          "type": "array",
-          "title": "Responders",
-          "description": "Responders to the alert"
-        },
         "priority": {
           "type": "string",
           "title": "Priority"
@@ -156,6 +269,12 @@
         "target": "opsGenieService",
         "many": true,
         "required": false
+      },
+      "respondingTeam": {
+        "title": "Responding Team",
+        "target": "opsGenieTeam",
+        "required": false,
+        "many": true
       }
     }
   },
@@ -193,11 +312,6 @@
             "type": "string"
           },
           "title": "Tags"
-        },
-        "responders": {
-          "type": "array",
-          "title": "Responders",
-          "description": "Responders to the alert"
         },
         "integration": {
           "type": "string",
@@ -243,6 +357,12 @@
         "target": "opsGenieIncident",
         "required": false,
         "many": false
+      },
+      "respondingTeam": {
+        "title": "Responding Team",
+        "target": "opsGenieTeam",
+        "required": false,
+        "many": true
       }
     }
   }

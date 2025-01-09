@@ -8,12 +8,11 @@ from port_ocean.core.handlers.entities_state_applier.base import (
 from port_ocean.core.handlers.entities_state_applier.port.get_related_entities import (
     get_related_entities,
 )
-from port_ocean.core.handlers.entities_state_applier.port.order_by_entities_dependencies import (
-    order_by_entities_dependencies,
-)
+
 from port_ocean.core.models import Entity
 from port_ocean.core.ocean_types import EntityDiff
-from port_ocean.core.utils import is_same_entity, get_port_diff
+from port_ocean.core.utils.entity_topological_sorter import EntityTopologicalSorter
+from port_ocean.core.utils.utils import is_same_entity, get_port_diff
 
 
 class HttpEntitiesStateApplier(BaseEntitiesStateApplier):
@@ -71,9 +70,9 @@ class HttpEntitiesStateApplier(BaseEntitiesStateApplier):
         logger.info(
             f"Updating entity diff (created: {len(diff.created)}, deleted: {len(diff.deleted)}, modified: {len(diff.modified)})"
         )
-        await self.upsert(kept_entities, user_agent_type)
+        modified_entities = await self.upsert(kept_entities, user_agent_type)
 
-        await self._safe_delete(diff.deleted, kept_entities, user_agent_type)
+        await self._safe_delete(diff.deleted, modified_entities, user_agent_type)
 
     async def delete_diff(
         self,
@@ -95,27 +94,30 @@ class HttpEntitiesStateApplier(BaseEntitiesStateApplier):
 
     async def upsert(
         self, entities: list[Entity], user_agent_type: UserAgentType
-    ) -> None:
+    ) -> list[Entity]:
         logger.info(f"Upserting {len(entities)} entities")
+        modified_entities: list[Entity] = []
         if event.port_app_config.create_missing_related_entities:
-            await self.context.port_client.batch_upsert_entities(
+            modified_entities = await self.context.port_client.batch_upsert_entities(
                 entities,
                 event.port_app_config.get_port_request_options(),
                 user_agent_type,
                 should_raise=False,
             )
         else:
-            ordered_created_entities = reversed(
-                order_by_entities_dependencies(entities)
-            )
-
-            for entity in ordered_created_entities:
-                await self.context.port_client.upsert_entity(
+            for entity in entities:
+                upsertedEntity = await self.context.port_client.upsert_entity(
                     entity,
                     event.port_app_config.get_port_request_options(),
                     user_agent_type,
                     should_raise=False,
                 )
+                if upsertedEntity:
+                    modified_entities.append(upsertedEntity)
+                # condition to false to differentiate from `result_entity.is_using_search_identifier`
+                if upsertedEntity is False:
+                    event.entity_topological_sorter.register_entity(entity)
+        return modified_entities
 
     async def delete(
         self, entities: list[Entity], user_agent_type: UserAgentType
@@ -129,7 +131,9 @@ class HttpEntitiesStateApplier(BaseEntitiesStateApplier):
                 should_raise=False,
             )
         else:
-            ordered_deleted_entities = order_by_entities_dependencies(entities)
+            ordered_deleted_entities = (
+                EntityTopologicalSorter.order_by_entities_dependencies(entities)
+            )
 
             for entity in ordered_deleted_entities:
                 await self.context.port_client.delete_entity(

@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote_plus
 
 import httpx
@@ -11,7 +11,8 @@ from port_ocean.clients.port.utils import (
     handle_status_code,
     PORT_HTTP_MAX_CONNECTIONS_LIMIT,
 )
-from port_ocean.core.models import Entity
+from port_ocean.core.models import Entity, PortAPIErrorMessage
+from starlette import status
 
 
 class EntityClientMixin:
@@ -29,7 +30,27 @@ class EntityClientMixin:
         request_options: RequestOptions,
         user_agent_type: UserAgentType | None = None,
         should_raise: bool = True,
-    ) -> None:
+    ) -> Entity | None | Literal[False]:
+        """
+        This function upserts an entity into Port.
+
+        Usage:
+        ```python
+            upsertedEntity = await self.context.port_client.upsert_entity(
+                            entity,
+                            event.port_app_config.get_port_request_options(),
+                            user_agent_type,
+                            should_raise=False,
+                        )
+        ```
+        :param entity: An Entity to be upserted
+        :param request_options: A dictionary specifying how to upsert the entity
+        :param user_agent_type: a UserAgentType specifying who is preforming the action
+        :param should_raise: A boolean specifying whether the error should be raised or handled silently
+        :return: [Entity] if the upsert occured successfully
+        :return: [None] will be returned if entity is using search identifier
+        :return: [False] will be returned if upsert failed because of unmet dependency
+        """
         validation_only = request_options["validation_only"]
         async with self.semaphore:
             logger.debug(
@@ -48,15 +69,50 @@ class EntityClientMixin:
                     ).lower(),
                     "validation_only": str(validation_only).lower(),
                 },
+                extensions={"retryable": True},
             )
-
         if response.is_error:
             logger.error(
                 f"Error {'Validating' if validation_only else 'Upserting'} "
                 f"entity: {entity.identifier} of "
                 f"blueprint: {entity.blueprint}"
             )
+            result = response.json()
+
+            if (
+                response.status_code == status.HTTP_404_NOT_FOUND
+                and not result.get("ok")
+                and result.get("error") == PortAPIErrorMessage.NOT_FOUND.value
+            ):
+                # Return false to differentiate from `result_entity.is_using_search_identifier`
+                return False
         handle_status_code(response, should_raise)
+        result = response.json()
+
+        result_entity = (
+            Entity.parse_obj(result["entity"]) if result.get("entity") else entity
+        )
+
+        # Happens when upsert fails and search identifier is defined.
+        # We return None to ignore the entity later in the delete process
+        if result_entity.is_using_search_identifier:
+            return None
+
+        # In order to save memory we'll keep only the identifier, blueprint and relations of the
+        # upserted entity result for later calculations
+        reduced_entity = Entity(
+            identifier=result_entity.identifier, blueprint=result_entity.blueprint
+        )
+
+        # Turning dict typed relations (raw search relations) is required
+        # for us to be able to successfully calculate the participation related entities
+        # and ignore the ones that don't as they weren't upserted
+        reduced_entity.relations = {
+            key: None if isinstance(relation, dict) else relation
+            for key, relation in result_entity.relations.items()
+        }
+
+        return reduced_entity
 
     async def batch_upsert_entities(
         self,
@@ -64,8 +120,8 @@ class EntityClientMixin:
         request_options: RequestOptions,
         user_agent_type: UserAgentType | None = None,
         should_raise: bool = True,
-    ) -> None:
-        await asyncio.gather(
+    ) -> list[Entity]:
+        modified_entities_results = await asyncio.gather(
             *(
                 self.upsert_entity(
                     entity,
@@ -77,6 +133,17 @@ class EntityClientMixin:
             ),
             return_exceptions=True,
         )
+        entity_results = [
+            entity for entity in modified_entities_results if isinstance(entity, Entity)
+        ]
+        if not should_raise:
+            return entity_results
+
+        for entity_result in modified_entities_results:
+            if isinstance(entity_result, Exception):
+                raise entity_result
+
+        return entity_results
 
     async def delete_entity(
         self,
@@ -168,7 +235,6 @@ class EntityClientMixin:
                 "include": ["blueprint", "identifier"],
             },
             extensions={"retryable": True},
-            timeout=30,
         )
         handle_status_code(response)
         return [Entity.parse_obj(result) for result in response.json()["entities"]]

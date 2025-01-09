@@ -1,4 +1,4 @@
-from typing import Optional, Any, AsyncIterable, Tuple
+from typing import Optional, Any, AsyncIterable, Tuple, Dict
 
 import httpx
 from loguru import logger
@@ -9,7 +9,7 @@ from newrelic_integration.core.query_templates.entities import (
     LIST_ENTITIES_BY_GUIDS_QUERY,
     GET_ENTITY_BY_GUID_QUERY,
 )
-from newrelic_integration.core.utils import send_graph_api_request
+from newrelic_integration.core.utils import send_graph_api_request, format_tags
 from newrelic_integration.utils import (
     get_port_resource_configuration_by_port_kind,
     render_query,
@@ -34,7 +34,7 @@ class EntitiesHandler:
             raise NewRelicNotFoundError(
                 f"No entity found in newrelic for guid {entity_guid}",
             )
-        self._format_tags(entity)
+        format_tags(entity)
         return entity
 
     async def list_entities_by_resource_kind(
@@ -56,15 +56,19 @@ class EntitiesHandler:
             )
 
         async def extract_entities(
-            response: dict[Any, Any]
-        ) -> Tuple[Optional[str], list[dict[Any, Any]]]:
+            response: Optional[Dict[str, Any]] = None
+        ) -> Tuple[Optional[str], list[Dict[str, Any]]]:
+            if not response:
+                return None, []
+
             results = (
                 response.get("data", {})
                 .get("actor", {})
                 .get("entitySearch", {})
                 .get("results", {})
             )
-            return results.get("nextCursor"), results.get("entities", [])
+
+            return (results.get("nextCursor"), results.get("entities", []))
 
         async for entity in send_paginated_graph_api_request(
             self.http_client,
@@ -74,8 +78,10 @@ class EntitiesHandler:
             entity_query_filter=resource_config.selector.entity_query_filter,
             extra_entity_properties=resource_config.selector.entity_extra_properties_query,
         ):
-            self._format_tags(entity)
-            yield entity
+
+            if entity:
+                self._format_tags(entity)
+                yield entity
 
     async def list_entities_by_guids(
         self, http_client: httpx.AsyncClient, entity_guids: list[str]
@@ -92,7 +98,7 @@ class EntitiesHandler:
         )
         entities = response.get("data", {}).get("actor", {}).get("entities", [])
         for entity in entities:
-            self._format_tags(entity)
+            format_tags(entity)
         return entities
 
     @staticmethod

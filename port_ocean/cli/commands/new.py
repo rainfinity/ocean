@@ -1,10 +1,38 @@
 # -*- coding: utf-8 -*-
 
+import json
+import os
+
 import click
 from cookiecutter.main import cookiecutter  # type: ignore
 
-from port_ocean.cli.commands.main import cli_start, print_logo, console
+from port_ocean.cli.commands.main import cli_start, console, print_logo
 from port_ocean.cli.utils import cli_root_path
+
+
+def add_vscode_configuration(result: str, name: str) -> None:
+    vscode_entry_root_path = "${workspaceFolder}/integrations/" + name
+    new_vscode_entry = {
+        "console": "integratedTerminal",
+        "cwd": vscode_entry_root_path,
+        "envFile": f"{vscode_entry_root_path}/.env",
+        "justMyCode": True,
+        "name": f"Run {name} integration",
+        "program": f"{vscode_entry_root_path}/debug.py",
+        "python": f"{vscode_entry_root_path}/.venv/bin/python",
+        "request": "launch",
+        "type": "debugpy",
+    }
+
+    vs_code_json_path = os.path.join(os.path.dirname(result), "../.vscode/launch.json")
+    if not os.path.exists(vs_code_json_path):
+        return
+    vs_code_json = json.load(open(vs_code_json_path, "r"))
+    vs_code_json["configurations"].append(new_vscode_entry)
+
+    with open(vs_code_json_path, "w") as vs_code_json_file:
+        json.dump(vs_code_json, vs_code_json_file, indent=2)
+        vs_code_json_file.write("\n")
 
 
 @cli_start.command()
@@ -35,7 +63,13 @@ def new(path: str, is_private_integration: bool) -> None:
             "is_private_integration": is_private_integration,
         },
     )
+
     name = result.split("/")[-1]
+
+    final_private_integration = os.path.exists(os.path.join(result, "Dockerfile"))
+
+    if not final_private_integration:
+        add_vscode_configuration(result, name)
 
     console.print(
         "\n🌊 Ahoy, Captain! Your project is ready to set sail into the vast ocean of possibilities!",
@@ -43,14 +77,15 @@ def new(path: str, is_private_integration: bool) -> None:
     )
     console.print("Here are your next steps:\n", style="bold")
     console.print(
-        "⚓️ Install necessary packages: Run [bold][blue]make install[/blue][/bold] to install all required packages for your project.\n"
-        f"▶️ [bold][blue]cd {path}/{name} && make install && . .venv/bin/activate[/blue][/bold]\n"
+        f"⚓️ Install necessary packages: Run [bold][blue]cd {path}/{name} && make install && . .venv/bin/activate[/blue][/bold] to install all required packages for your project."
     )
     console.print(
-        "⚓️ Set sail with [blue]Ocean[/blue]: Run [bold][blue]ocean sail[/blue] <path_to_integration>[/bold] to run the project using Ocean.\n"
-        f"▶️ [bold][blue]ocean sail {path}/{name}[/blue][/bold] \n"
+        "⚓️ Copy example env file: Run [bold][blue]cp .env.example .env [/blue][/bold] and update your integration's configuration in the .env file."
     )
     console.print(
-        "⚓️ Smooth sailing with [blue]Make[/blue]: Alternatively, you can run [bold][blue]make run[/blue][/bold] to launch your project using Make. \n"
-        f"▶️ [bold][blue]make run {path}/{name}[/blue][/bold]"
+        "⚓️ Set sail with [blue]Ocean[/blue]: Run [bold][blue]ocean sail[/blue][/bold] to run the project using Ocean."
     )
+    if not final_private_integration:
+        console.print(
+            f"⚓️ Smooth sailing with [blue]Make[/blue]: Alternatively, you can run [bold][blue]make run {path}/{name}[/blue][/bold] to launch your project using Make."
+        )

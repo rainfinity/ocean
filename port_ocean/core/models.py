@@ -1,11 +1,34 @@
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel
 from pydantic.fields import Field
 
 
-Runtime = Literal["OnPrem", "Saas"]
+class Runtime(Enum):
+    Saas = "Saas"
+    OnPrem = "OnPrem"
+
+    @property
+    def is_saas_runtime(self) -> bool:
+        return self in [Runtime.Saas]
+
+    def is_installation_type_compatible(self, installation_type: str) -> bool:
+        """
+        Check if the installation type is compatible with the runtime
+
+        if the runtime is Saas, the installation type should start with Saas
+        else the installation type should be OnPrem
+        """
+        return (
+            self.value == Runtime.Saas.value
+            and installation_type.startswith(self.value)
+        ) or installation_type == self.value
+
+
+class PortAPIErrorMessage(Enum):
+    NOT_FOUND = "not_found"
 
 
 class Entity(BaseModel):
@@ -15,6 +38,10 @@ class Entity(BaseModel):
     team: str | None | list[Any] = []
     properties: dict[str, Any] = {}
     relations: dict[str, Any] = {}
+
+    @property
+    def is_using_search_identifier(self) -> bool:
+        return isinstance(self.identifier, dict)
 
 
 class BlueprintRelation(BaseModel):

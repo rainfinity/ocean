@@ -1,11 +1,16 @@
 import typing
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 from loguru import logger
 
 from client import DatadogClient
-from overrides import SLOHistoryResourceConfig
+from overrides import (
+    SLOHistoryResourceConfig,
+    DatadogResourceConfig,
+    DatadogSelector,
+    TeamResourceConfig,
+)
 from port_ocean.context.event import event
 from port_ocean.context.ocean import ocean
 from port_ocean.core.ocean_types import ASYNC_GENERATOR_RESYNC_TYPE
@@ -17,6 +22,9 @@ class ObjectKind(StrEnum):
     SLO = "slo"
     SERVICE = "service"
     SLO_HISTORY = "sloHistory"
+    SERVICE_METRIC = "serviceMetric"
+    TEAM = "team"
+    USER = "user"
 
 
 def init_client() -> DatadogClient:
@@ -24,7 +32,34 @@ def init_client() -> DatadogClient:
         ocean.integration_config["datadog_base_url"],
         ocean.integration_config["datadog_api_key"],
         ocean.integration_config["datadog_application_key"],
+        ocean.integration_config["datadog_access_token"],
     )
+
+
+@ocean.on_resync(ObjectKind.TEAM)
+async def on_resync_teams(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
+    dd_client = init_client()
+
+    selector = cast(TeamResourceConfig, event.resource_config).selector
+
+    async for teams in dd_client.get_teams():
+        logger.info(f"Received teams batch with {len(teams)} teams")
+        if selector.include_members:
+            for team in teams:
+                members = []
+                async for member_batch in dd_client.get_team_members(team["id"]):
+                    members.extend(member_batch)
+                team["__members"] = members
+        yield teams
+
+
+@ocean.on_resync(ObjectKind.USER)
+async def on_resync_users(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
+    dd_client = init_client()
+
+    async for users in dd_client.get_users():
+        logger.info(f"Received batch with {len(users)} users")
+        yield users
 
 
 @ocean.on_resync(ObjectKind.HOST)
@@ -76,8 +111,28 @@ async def on_resync_services(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
     dd_client = init_client()
 
     async for services in dd_client.get_services():
-        logger.info(f"Received batch with {len(services)} service catalogs")
+        logger.info(f"Received batch with {len(services)} services")
         yield services
+
+
+@ocean.on_resync(ObjectKind.SERVICE_METRIC)
+async def on_resync_service_metrics(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
+    dd_client = init_client()
+
+    params: DatadogSelector = typing.cast(
+        DatadogResourceConfig, event.resource_config
+    ).selector.datadog_selector
+
+    async for metrics in dd_client.get_metrics(
+        metric_query=params.metric,
+        env_tag=params.env.tag,
+        env_value=params.env.value,
+        service_tag=params.service.tag,
+        service_value=params.service.value,
+        time_window_in_minutes=params.timeframe,
+    ):
+        logger.info(f"Received batch with {len(metrics)} metrics")
+        yield metrics
 
 
 # https://docs.datadoghq.com/integrations/webhooks/

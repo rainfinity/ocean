@@ -1,4 +1,5 @@
-description: launchdarkly integration for Port Ocean
+title: LaunchDarkly
+description: LaunchDarkly integration for Port Ocean
 docs: https://docs.getport.io/build-your-software-catalog/sync-data-to-catalog/feature-management/launchdarkly
 icon: Launchdarkly
 features:
@@ -15,7 +16,7 @@ configurations:
     required: true
     sensitive: true
     type: string
-    description: A valid LaunchDarkly API token with API version 20220603. To create a token, see the <a href=" https://docs.launchdarkly.com/home/account-security/api-access-tokens">Launchdarkly Documentation</a>.
+    description: A valid LaunchDarkly API token with API version 20220603. To create a token, see the <a target="_blank" href=" https://docs.launchdarkly.com/home/account-security/api-access-tokens">Launchdarkly Documentation</a>.
   - name: launchdarklyHost
     required: false
     type: string
