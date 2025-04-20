@@ -6,6 +6,230 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <!-- towncrier release notes start -->
+## 0.22.4 (2025-04-15)
+
+### Features
+-Refactored logger setup to generate unique instance IDs.
+-Renamed try_get_hostname to resolve_hostname for clarity.
+-Removed redundant instance parameter from setup_logger.
+
+## 0.22.3 (2025-04-15)
+
+### Features
+- Added inctance and hostname to logger configuration.
+- Updated setup_logger function to include inctance.
+- Generated unique inctance in run function.
+- Enhanced log format to include inctance.
+
+## 0.22.2 (2025-04-06)
+
+### Bug Fixes
+
+- Fixed entityDeletionThreshold not sent as part of the initial port app configuration.
+
+## 0.22.1 (2025-04-02)
+
+### Features
+
+- Added support for team search query in entity mapping
+- Enhanced batch_upsert_entities to return tuples with success status.
+- Improved null property handling in entity field comparisons.
+- Updated upsert logic to use batch upsert consistently.
+- Added unit tests for null property handling in entity comparisons.
+
+## 0.22.0 (2025-03-17)
+
+### Features
+
+- Added metrics reporting capability using promethues, which can be accessible through the /metrics route.
+
+## 0.21.5 (2025-03-12)
+
+### Improvements
+
+- Updated LiveEventsProcessorManager to fetch the latest port app configuration for each event by calling `get_port_app_config(use_cache=False)`.
+- This change ensures that the processor manager always uses the most current configuration when handling events.
+
+## 0.21.4 (2025-03-12)
+
+### Improvements
+
+- Updated core dependencies (jinja 3.1.6, confluent-kafka 2.8.2 and cryptography =43.0.1,<45.0.0)
+
+## 0.21.3 (2025-03-09)
+
+### Improvements
+
+- Add minimum entities to map before searching
+
+## 0.21.2 (2025-03-09)
+
+### Improvements
+
+- Add configurable event processing timeouts to Ocean
+
+## 0.21.1 (2025-03-09)
+
+### Bug Fixes
+
+- fixed wrong integration version showing in UI and API by moving the check of OCEAN__INITIALIZE_PORT_RESOURCES=false to after the patch
+
+## 0.21.0 (2025-03-01)
+
+### Features
+
+- Added `on_resync_start` and `on_resync_complete` hooks to the `SyncRawMixin` class to allow integrations to run code before and after a resync.
+
+### Bug Fixes
+
+- Fixed `ocean new` on Unix-like systems failing with `FileNotFoundError` (#1402)
+- Fixed cancelled error handling while running resync
+
+## 0.20.4 (2025-02-25)
+
+### Bug Fixes
+- Converted should_process_event and get_matching_kinds methods to async.
+- Enhanced error handling to process successful results even if some processors fail.
+- Updated tests to validate async methods and error handling improvements.
+- Added a new integration test for webhook processing with mixed processor outcomes.
+
+
+
+## 0.20.3 (2025-02-24)
+
+### Improvements
+
+- Changing log level for frequent error
+
+## 0.20.2 (2025-02-23)
+
+### Bug Fixes
+
+- Validate feature flag for get config in new integrations - outside of mixin
+
+## 0.20.1 (2025-02-23)
+
+### Bug Fixes
+
+- Validate feature flag for get config in new integrations
+
+## 0.20.0 (2025-02-20)
+
+### Features
+
+- Added comprehensive live events support in Ocean Core:
+  - Introduced `LiveEventsMixin` for standardized live event handling across integrations
+  - Added methods for resource mapping, entity deletion threshold, and data processing
+  - Enhanced `AbstractWebhookProcessor` with live events integration
+  - Added robust retry logic and lifecycle management for webhook processing
+  - Implemented history-preserving entity deletion and recreation for live events
+
+## 0.19.3 (2025-02-19)
+
+### Features
+
+- Added new `base_url` to Ocean Core. This will be used to deprecate the `OCEAN__INTEGRATION__CONFIG__APP_HOST` usage.
+
+## 0.19.2 (2025-02-19)
+
+### Bug Fixes
+
+- Fixed non awaited coroutine for provisioned integrations
+
+## 0.19.1 (2025-02-18)
+
+### Features
+
+- Verify Provision enabled integrations
+
+### Bug Fixes
+
+- Ensure no race condition with externally created integrations
+
+## 0.19.0 (2025-02-16)
+
+### Features
+
+- Added capability to read configurations from a file.
+- Add option to periodically keep the integration's configuration updated with the file's configuration.
+- Add reloading configuration on retry
+
+## 0.18.9 (2025-02-07)
+
+### Improvements
+
+- Added option to destroy integration config while performing defaults clean cli command: `ocean defaults clean --force --wait --destroy`
+
+## 0.18.8 (2025-02-04)
+
+### Bug Fixes
+
+- Fix flaky tests
+
+## 0.18.7 (2025-01-29)
+
+### Improvements
+
+- Reduce cases of mass deletion of entities on resync by adding threshold for deletion
+
+## 0.18.6 (2025-01-29)
+
+### Improvements
+
+- Entity diff calculation only on resync
+
+## 0.18.5 (2025-01-28)
+
+### Bug Fixes
+
+- Fixed an issue where the integration would delete all entities if the Port app configuration was empty
+
+## 0.18.4 (2025-01-22)
+
+### Improvements
+
+- added check diff entitites to reduce load from port to all integrations
+
+## 0.18.3 (2025-01-22)
+
+### Improvements
+
+- Opt-in integration resource provision by Port
+
+## 0.18.2 (2025-01-21)
+
+### Improvements
+
+- Updated the search entities query sent to port with one rule of identifier instead of many
+
+## 0.18.1 (2025-01-21)
+
+### Improvements
+
+- Updated the search entities query sent to port with blueprint
+
+## 0.18.0 (2025-01-15)
+
+### Improvements
+
+- Introduced a new entity diff resolver to reduce port system load by comparing entities and upserting changed entities only
+
+## 0.17.8 (2025-01-15)
+
+### Bug Fixes
+
+- Fixed vulnerability in the jinja package that is resolved by updating to 3.1.5
+
+
+## 0.17.7 (2025-01-08)
+
+### Bug Fixes
+
+- Fixed a bug where creating an integration with WEBHOOKS_ONLY event listener failed.
+
+### Improvements
+
+- Added jira integration running config to vscode.
 
 ## 0.17.6 (2025-01-08)
 

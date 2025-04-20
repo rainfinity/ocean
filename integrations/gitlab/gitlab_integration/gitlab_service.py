@@ -1,16 +1,15 @@
 import asyncio
 import json
-import os
 import typing
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, List, Optional, Tuple, Union, Set
 
 import aiolimiter
 import anyio.to_thread
 import yaml
 import gitlab.exceptions
 from gitlab import Gitlab, GitlabError, GitlabList
-from gitlab.base import RESTObject, RESTObjectList
+from gitlab.base import RESTObject
 from gitlab.v4.objects import (
     Group,
     GroupMergeRequest,
@@ -20,17 +19,20 @@ from gitlab.v4.objects import (
     ProjectFile,
     ProjectPipeline,
     ProjectPipelineJob,
+    ProjectLabel,
     Hook,
 )
 from gitlab_integration.core.async_fetcher import AsyncFetcher
 from gitlab_integration.core.entities import generate_entity_from_port_yaml
-from gitlab_integration.core.utils import does_pattern_apply
+from gitlab_integration.core.utils import (
+    does_pattern_apply,
+    convert_glob_to_gitlab_patterns,
+)
 from loguru import logger
 from yaml.parser import ParserError
 
 from port_ocean.context.event import event
 from port_ocean.core.models import Entity
-from port_ocean.utils.cache import cache_iterator_result
 import functools
 
 PROJECTS_CACHE_KEY = "__cache_all_projects"
@@ -171,53 +173,66 @@ class GitlabService:
     async def search_files_in_project(
         self, project: Project, path: str | List[str]
     ) -> AsyncIterator[list[dict[str, Any]]]:
+        """Search for files in a GitLab project matching the given path pattern(s)."""
         logger.info(
             f"Searching project {project.path_with_namespace} for files with path pattern {path}"
         )
-        paths = [path] if not isinstance(path, list) else path
-        for path in paths:
-            file_pattern = os.path.basename(path)
+        gitlab_patterns = convert_glob_to_gitlab_patterns(path)
+
+        files_found = False
+        async for matched_files in self._process_search_patterns(
+            project, gitlab_patterns
+        ):
+            yield matched_files
+            files_found = True
+
+        if not files_found:
+            logger.info(
+                f"No files with content found for project {project.path_with_namespace} for path {path}"
+            )
+
+    async def _process_search_patterns(
+        self, project: Project, gitlab_patterns: List[str]
+    ) -> AsyncIterator[list[dict]]:
+        for pattern in gitlab_patterns:
             async with self._search_rate_limiter:
-                logger.info(
-                    f"Searching project {project.path_with_namespace} for file pattern {file_pattern}"
-                )
-                async for files in AsyncFetcher.fetch_batch(
+                async for search_results in AsyncFetcher.fetch_batch(
                     project.search,
                     scope="blobs",
-                    search=f"filename:{file_pattern}",
+                    search=f"path:{pattern}",
                     search_type="advanced",
                     retry_transient_errors=True,
                 ):
+                    if not search_results:
+                        continue
+
+                    files_list = typing.cast(List[dict[str, Any]], search_results)
+                    matching_files = [
+                        f for f in files_list if does_pattern_apply(pattern, f["path"])
+                    ]
                     logger.info(
-                        f"Found {len(files)} files in project {project.path_with_namespace} with file pattern {file_pattern}, filtering all that don't match path pattern {path}"
+                        f"Found {len(matching_files)} files in project {project.path_with_namespace} "
+                        f"for pattern {pattern}"
                     )
-                    files = typing.cast(Union[GitlabList, List[Dict[str, Any]]], files)
-                    tasks = []
-                    for file in files:
-                        if does_pattern_apply(path, file["path"]):
-                            tasks.append(
-                                self.get_and_parse_single_file(
-                                    project, file["path"], project.default_branch
-                                )
-                            )
-                        else:
-                            logger.debug(
-                                f"Skipping file {file['path']} as it doesn't match path pattern {path} for project {project.path_with_namespace}"
-                            )
-                    logger.info(
-                        f"Found {len(tasks)} files in project {project.path_with_namespace} that match path pattern {path}"
-                    )
-                    parsed_files = await asyncio.gather(*tasks)
+                    if not matching_files:
+                        continue
+
+                    content_tasks = [
+                        self.get_and_parse_single_file(
+                            project, file["path"], project.default_branch
+                        )
+                        for file in matching_files
+                    ]
+
+                    parsed_files = await asyncio.gather(*content_tasks)
                     files_with_content = [file for file in parsed_files if file]
+
                     if files_with_content:
                         logger.info(
-                            f"Found {len(files_with_content)} files with content for project {project.path_with_namespace} for path {path}"
+                            f"Found {len(files_with_content)} files with content in "
+                            f"{project.path_with_namespace} matching {pattern}"
                         )
                         yield files_with_content
-                    else:
-                        logger.info(
-                            f"No files with content found for project {project.path_with_namespace} for path {path}"
-                        )
 
     async def _get_entities_from_git(
         self, project: Project, file_path: str | List[str], sha: str, ref: str
@@ -227,7 +242,9 @@ class GitlabService:
                 project.files.get, file_path, sha
             )
 
-            entities = yaml.safe_load(file_content.decode())
+            entities = await anyio.to_thread.run_sync(
+                yaml.safe_load, file_content.decode()
+            )
             raw_entities = [
                 Entity(**entity_data)
                 for entity_data in (
@@ -470,7 +487,6 @@ class GitlabService:
                 logger.error(f"Failed to fetch group with ID {group_id}: {err}")
                 raise
 
-    @cache_iterator_result()
     async def get_all_groups(
         self, skip_validation: bool = False
     ) -> typing.AsyncIterator[List[Group]]:
@@ -550,9 +566,15 @@ class GitlabService:
     @classmethod
     async def async_project_labels_wrapper(cls, project: Project) -> dict[str, Any]:
         try:
-            labels = await anyio.to_thread.run_sync(project.labels.list)
-            serialized_labels = [label.attributes for label in labels]
-            return {"__labels": serialized_labels}
+            all_labels = [
+                label.attributes
+                async for labels_batch in AsyncFetcher.fetch_batch(
+                    fetch_func=project.labels.list
+                )
+                for label in typing.cast(List[ProjectLabel], labels_batch)
+            ]
+
+            return {"__labels": all_labels}
         except Exception as e:
             logger.warning(
                 f"Failed to get labels for project={project.path_with_namespace}. error={e}"
@@ -729,58 +751,91 @@ class GitlabService:
         obj: RESTObject,
         include_inherited_members: bool = False,
         include_bot_members: bool = True,
+        include_verbose_member_object: bool = False,
     ) -> RESTObject:
         """
-        Enriches an object (e.g., Project or Group) with its members and optionally their public emails.
+        Enriches an object (e.g., Project or Group) with its members.
         """
-        members_list = [
-            member
-            async for members in self.get_all_object_members(
-                obj, include_inherited_members, include_bot_members
-            )
-            for member in members
-        ]
+        obj_name = obj.name
+        logger.info(f"Starting member enrichment for {obj.name}")
 
-        setattr(obj, "__members", [member.asdict() for member in members_list])
-        return obj
+        setattr(obj, "__members", [])
+        members_list = getattr(obj, "__members")
+
+        processed_member_ids: Set[int] = set()
+        total_members_processed = 0
+
+        try:
+            async for members_batch in self.get_all_object_members(
+                obj, include_inherited_members, include_bot_members
+            ):
+                # Filter out duplicates
+                for member in members_batch:
+                    member_id = member.id
+                    if member_id not in processed_member_ids:
+                        processed_member_ids.add(member_id)
+                        if include_verbose_member_object:
+                            members_list.append(member.asdict())
+                        else:
+                            members_list.append(
+                                {
+                                    "id": member.id,
+                                    "username": member.username,
+                                    "email": getattr(member, "email", ""),
+                                }
+                            )
+                total_members_processed += len(members_batch)
+
+                logger.info(
+                    f"Processed {total_members_processed} members for {obj_name}"
+                )
+
+            logger.info(
+                f"Completed member enrichment for {obj_name} with {len(members_list)} unique members"
+            )
+            return obj
+
+        except Exception as e:
+            logger.error(f"Error enriching members for {obj_name}: {e}")
+            return obj
 
     async def get_all_object_members(
         self,
         obj: RESTObject,
         include_inherited_members: bool = False,
         include_bot_members: bool = True,
-    ) -> AsyncIterator[RESTObjectList]:
+        page_size: int = 50,
+    ) -> AsyncIterator[List[RESTObject]]:
         """
         Fetches all members of an object (e.g., Project or Group) generically.
         """
+        obj_name = getattr(obj, "name", "unknown")
         try:
-            obj_name = getattr(obj, "name", "unknown")
-            logger.info(f"Fetching all members of {obj_name}")
+            logger.info(
+                f"Fetching members of {obj_name} with pagination size {page_size}"
+            )
 
             members_attr = "members_all" if include_inherited_members else "members"
             members_manager = getattr(obj, members_attr, None)
             if not members_manager:
                 raise AttributeError(f"Object does not have attribute '{members_attr}'")
 
-            fetch_func = members_manager.list
-
             validation_func = functools.partial(
                 self.should_run_for_members, include_bot_members
             )
 
             async for members_batch in AsyncFetcher.fetch_batch(
-                fetch_func=fetch_func,
+                fetch_func=members_manager.list,
                 validation_func=validation_func,
-                pagination="offset",
+                pagination="page",
+                page_size=page_size,
                 order_by="id",
                 sort="asc",
             ):
-                members: RESTObjectList = typing.cast(RESTObjectList, members_batch)
-
-                logger.info(
-                    f"Queried {len(members)} members {[member.username for member in members]} from {obj_name}"
-                )
+                members: List[RESTObject] = typing.cast(List[RESTObject], members_batch)
+                logger.info(f"Fetched page with {len(members)} members for {obj_name}")
                 yield members
+
         except Exception as e:
             logger.error(f"Failed to get members for object='{obj_name}'. Error: {e}")
             return
@@ -811,7 +866,7 @@ class GitlabService:
 
         return entities_before, entities_after
 
-    def _parse_file_content(
+    async def _parse_file_content(
         self, project: Project, file: ProjectFile
     ) -> Union[str, dict[str, Any], list[Any]] | None:
         """
@@ -826,13 +881,17 @@ class GitlabService:
             )
             return None
         try:
-            return json.loads(file.decode())
+            return await anyio.to_thread.run_sync(json.loads, file.decode())
         except json.JSONDecodeError:
             try:
                 logger.debug(
                     f"Trying to process file {file.file_path} in project {project.path_with_namespace} as YAML"
                 )
-                documents = list(yaml.load_all(file.decode(), Loader=yaml.SafeLoader))
+                documents = list(
+                    await anyio.to_thread.run_sync(
+                        yaml.load_all, file.decode(), yaml.SafeLoader
+                    )
+                )
                 if not documents:
                     logger.debug(
                         f"Failed to parse file {file.file_path} in project {project.path_with_namespace} as YAML,"
@@ -861,7 +920,7 @@ class GitlabService:
                 f"Fetched file {file_path} in project {project.path_with_namespace}"
             )
             project_file = typing.cast(ProjectFile, project_file)
-            parsed_file = self._parse_file_content(project, project_file)
+            parsed_file = await self._parse_file_content(project, project_file)
             project_file_dict = project_file.asdict()
 
             if not parsed_file:

@@ -22,7 +22,7 @@ class EntityMapping(BaseModel):
     identifier: str | IngestSearchQuery
     title: str | None
     blueprint: str
-    team: str | None
+    team: str | IngestSearchQuery | None
     properties: dict[str, str] = Field(default_factory=dict)
     relations: dict[str, str | IngestSearchQuery] = Field(default_factory=dict)
 
@@ -51,12 +51,16 @@ class ResourceConfig(BaseModel):
 
 
 class PortAppConfig(BaseModel):
+    _default_entity_deletion_threshold: float = 0.9
     enable_merge_entity: bool = Field(alias="enableMergeEntity", default=True)
     delete_dependent_entities: bool = Field(
         alias="deleteDependentEntities", default=True
     )
     create_missing_related_entities: bool = Field(
         alias="createMissingRelatedEntities", default=True
+    )
+    entity_deletion_threshold: float | None = Field(
+        alias="entityDeletionThreshold", default=None
     )
     resources: list[ResourceConfig] = Field(default_factory=list)
 
@@ -68,8 +72,13 @@ class PortAppConfig(BaseModel):
             "validation_only": False,
         }
 
+    def get_entity_deletion_threshold(self) -> float | None:
+        if self.entity_deletion_threshold is not None:
+            return self.entity_deletion_threshold
+        return self._default_entity_deletion_threshold
+
     def to_request(self) -> dict[str, Any]:
-        return {
+        mapping = {
             "deleteDependentEntities": self.delete_dependent_entities,
             "createMissingRelatedEntities": self.create_missing_related_entities,
             "enableMergeEntity": self.enable_merge_entity,
@@ -78,6 +87,9 @@ class PortAppConfig(BaseModel):
                 for resource in self.resources
             ],
         }
+        if self.entity_deletion_threshold is not None:
+            mapping["entityDeletionThreshold"] = self.entity_deletion_threshold
+        return mapping
 
     class Config:
         allow_population_by_field_name = True

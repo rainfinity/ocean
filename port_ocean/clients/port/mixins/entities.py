@@ -2,6 +2,7 @@ import asyncio
 from typing import Any, Literal
 from urllib.parse import quote_plus
 
+
 import httpx
 from loguru import logger
 
@@ -22,7 +23,9 @@ class EntityClientMixin:
         # Semaphore is used to limit the number of concurrent requests to port, to avoid overloading it.
         # The number of concurrent requests is set to 90% of the max connections limit, to leave some room for other
         # requests that are not related to entities.
-        self.semaphore = asyncio.Semaphore(round(0.9 * PORT_HTTP_MAX_CONNECTIONS_LIMIT))
+        self.semaphore = asyncio.Semaphore(
+            round(0.5 * PORT_HTTP_MAX_CONNECTIONS_LIMIT)
+        )  # 50% of the max connections limit in order to avoid overloading port
 
     async def upsert_entity(
         self,
@@ -97,11 +100,22 @@ class EntityClientMixin:
         # We return None to ignore the entity later in the delete process
         if result_entity.is_using_search_identifier:
             return None
+        return self._reduce_entity(result_entity)
 
-        # In order to save memory we'll keep only the identifier, blueprint and relations of the
-        # upserted entity result for later calculations
+    @staticmethod
+    def _reduce_entity(entity: Entity) -> Entity:
+        """
+        Reduces an entity to only keep identifier, blueprint and processed relations.
+        This helps save memory by removing unnecessary data.
+
+        Args:
+            entity: The entity to reduce
+
+        Returns:
+            Entity: A new entity with only the essential data
+        """
         reduced_entity = Entity(
-            identifier=result_entity.identifier, blueprint=result_entity.blueprint
+            identifier=entity.identifier, blueprint=entity.blueprint
         )
 
         # Turning dict typed relations (raw search relations) is required
@@ -109,9 +123,8 @@ class EntityClientMixin:
         # and ignore the ones that don't as they weren't upserted
         reduced_entity.relations = {
             key: None if isinstance(relation, dict) else relation
-            for key, relation in result_entity.relations.items()
+            for key, relation in entity.relations.items()
         }
-
         return reduced_entity
 
     async def batch_upsert_entities(
@@ -120,7 +133,7 @@ class EntityClientMixin:
         request_options: RequestOptions,
         user_agent_type: UserAgentType | None = None,
         should_raise: bool = True,
-    ) -> list[Entity]:
+    ) -> list[tuple[bool, Entity]]:
         modified_entities_results = await asyncio.gather(
             *(
                 self.upsert_entity(
@@ -133,17 +146,17 @@ class EntityClientMixin:
             ),
             return_exceptions=True,
         )
-        entity_results = [
-            entity for entity in modified_entities_results if isinstance(entity, Entity)
-        ]
-        if not should_raise:
-            return entity_results
 
-        for entity_result in modified_entities_results:
-            if isinstance(entity_result, Exception):
-                raise entity_result
+        entities_results: list[tuple[bool, Entity]] = []
+        for original_entity, result in zip(entities, modified_entities_results):
+            if isinstance(result, Exception) and should_raise:
+                raise result
+            elif isinstance(result, Entity):
+                entities_results.append((True, result))
+            elif result is False:
+                entities_results.append((False, original_entity))
 
-        return entity_results
+        return entities_results
 
     async def delete_entity(
         self,
@@ -202,7 +215,10 @@ class EntityClientMixin:
         )
 
     async def search_entities(
-        self, user_agent_type: UserAgentType, query: dict[Any, Any] | None = None
+        self,
+        user_agent_type: UserAgentType,
+        query: dict[Any, Any] | None = None,
+        parameters_to_include: list[str] | None = None,
     ) -> list[Entity]:
         default_query = {
             "combinator": "and",
@@ -232,7 +248,7 @@ class EntityClientMixin:
             headers=await self.auth.headers(user_agent_type),
             params={
                 "exclude_calculated_properties": "true",
-                "include": ["blueprint", "identifier"],
+                "include": parameters_to_include or ["blueprint", "identifier"],
             },
             extensions={"retryable": True},
         )

@@ -11,6 +11,7 @@ from port_ocean.clients.port.types import UserAgentType
 from port_ocean.context.event import TriggerType, event_context, EventType, event
 from port_ocean.context.ocean import ocean
 from port_ocean.context.resource import resource_context
+from port_ocean.context import resource
 from port_ocean.core.handlers.port_app_config.models import ResourceConfig
 from port_ocean.core.integrations.mixins import HandlerMixin, EventsMixin
 from port_ocean.core.integrations.mixins.utils import (
@@ -28,8 +29,10 @@ from port_ocean.core.ocean_types import (
     RAW_ITEM,
     CalculationResult,
 )
-from port_ocean.core.utils.utils import zip_and_sum, gather_and_split_errors_from_results
+from port_ocean.core.utils.utils import resolve_entities_diff, zip_and_sum, gather_and_split_errors_from_results
 from port_ocean.exceptions.core import OceanAbortException
+from port_ocean.helpers.metric.metric import MetricType, MetricPhase
+from port_ocean.helpers.metric.utils import TimeMetric
 
 SEND_RAW_DATA_EXAMPLES_AMOUNT = 5
 
@@ -130,24 +133,133 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
             )
         )
 
+    def _construct_search_query_for_entities(self, entities: list[Entity]) -> dict:
+        """Create a query to search for entities by their identifiers.
+
+        Args:
+            entities (list[Entity]): List of entities to search for.
+
+        Returns:
+            dict: Query structure for searching entities by identifier and blueprint.
+        """
+        return {
+            "combinator": "and",
+            "rules": [
+                {
+                    "property": "$identifier",
+                    "operator": "in",
+                    "value": [entity.identifier for entity in entities]
+                },
+                {
+                    "property": "$blueprint",
+                    "operator": "=",
+                    "value": entities[0].blueprint
+                }
+            ]
+        }
+
+    async def _map_entities_compared_with_port(
+        self,
+        entities: list[Entity],
+        resource: ResourceConfig,
+        user_agent_type: UserAgentType,
+    ) -> list[Entity]:
+        if not entities:
+            return []
+
+        if entities[0].is_using_search_identifier or entities[0].is_using_search_relation:
+            return entities
+
+        MIN_ENTITIES_TO_MAP = 10
+        if len(entities) <= MIN_ENTITIES_TO_MAP:
+            return entities
+
+        BATCH_SIZE = 50
+        entities_at_port_with_properties = []
+
+        # Process entities in batches
+        for start_index in range(0, len(entities), BATCH_SIZE):
+            entities_batch = entities[start_index:start_index + BATCH_SIZE]
+            batch_results = await self._fetch_entities_batch_from_port(
+                entities_batch,
+                resource,
+                user_agent_type
+            )
+            entities_at_port_with_properties.extend(batch_results)
+
+        logger.info("Got entities from port with properties and relations", port_entities=len(entities_at_port_with_properties))
+
+        if len(entities_at_port_with_properties) > 0:
+            return resolve_entities_diff(entities, entities_at_port_with_properties)
+        return entities
+
+
+    async def _fetch_entities_batch_from_port(
+        self,
+        entities_batch: list[Entity],
+        resource: ResourceConfig,
+        user_agent_type: UserAgentType,
+    ) -> list[Entity]:
+        query = self._construct_search_query_for_entities(entities_batch)
+        return await ocean.port_client.search_entities(
+            user_agent_type,
+            parameters_to_include=["blueprint", "identifier"] + (
+                ["title"] if resource.port.entity.mappings.title != None else []
+            ) + (
+                ["team"] if resource.port.entity.mappings.team != None else []
+            ) + [
+                f"properties.{prop}" for prop in resource.port.entity.mappings.properties
+            ] + [
+                f"relations.{relation}" for relation in resource.port.entity.mappings.relations
+            ],
+            query=query
+        )
+
     async def _register_resource_raw(
         self,
         resource: ResourceConfig,
         results: list[dict[Any, Any]],
         user_agent_type: UserAgentType,
         parse_all: bool = False,
-        send_raw_data_examples_amount: int = 0,
+        send_raw_data_examples_amount: int = 0
     ) -> CalculationResult:
         objects_diff = await self._calculate_raw(
             [(resource, results)], parse_all, send_raw_data_examples_amount
         )
-        modified_objects = await self.entities_state_applier.upsert(
-            objects_diff[0].entity_selector_diff.passed, user_agent_type
-        )
+        modified_objects = []
+
+        if event.event_type == EventType.RESYNC:
+            try:
+                changed_entities = await self._map_entities_compared_with_port(
+                    objects_diff[0].entity_selector_diff.passed,
+                    resource,
+                    user_agent_type
+                )
+                if changed_entities:
+                    logger.info("Upserting changed entities", changed_entities=len(changed_entities),
+                        total_entities=len(objects_diff[0].entity_selector_diff.passed))
+                    await self.entities_state_applier.upsert(
+                        changed_entities, user_agent_type
+                    )
+                else:
+                    logger.info("Entities in batch didn't changed since last sync, skipping", total_entities=len(objects_diff[0].entity_selector_diff.passed))
+                modified_objects = [ocean.port_client._reduce_entity(entity) for entity in objects_diff[0].entity_selector_diff.passed]
+            except Exception as e:
+                logger.warning(f"Failed to resolve batch entities with Port, falling back to upserting all entities: {str(e)}")
+                modified_objects = await self.entities_state_applier.upsert(
+                    objects_diff[0].entity_selector_diff.passed, user_agent_type
+                    )
+        else:
+           modified_objects = await self.entities_state_applier.upsert(
+                    objects_diff[0].entity_selector_diff.passed, user_agent_type
+                    )
+
+
         return CalculationResult(
-            objects_diff[0].entity_selector_diff._replace(passed=modified_objects),
+            number_of_transformed_entities=len(objects_diff[0].entity_selector_diff.passed),
+            entity_selector_diff=objects_diff[0].entity_selector_diff._replace(passed=modified_objects),
             errors=objects_diff[0].errors,
-            misonfigured_entity_keys=objects_diff[0].misonfigured_entity_keys,
+            misonfigured_entity_keys=objects_diff[0].misonfigured_entity_keys
         )
 
     async def _unregister_resource_raw(
@@ -163,7 +275,7 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
             return [], []
 
         objects_diff = await self._calculate_raw([(resource, results)])
-        entities_selector_diff, errors, _ = objects_diff[0]
+        entities_selector_diff, errors, _, _ = objects_diff[0]
 
         await self.entities_state_applier.delete(
             entities_selector_diff.passed, user_agent_type
@@ -171,6 +283,7 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
         logger.info("Finished unregistering change")
         return entities_selector_diff.passed, errors
 
+    @TimeMetric(MetricPhase.RESYNC)
     async def _register_in_batches(
         self, resource_config: ResourceConfig, user_agent_type: UserAgentType
     ) -> tuple[list[Entity], list[Exception]]:
@@ -186,37 +299,66 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
         send_raw_data_examples_amount = (
             SEND_RAW_DATA_EXAMPLES_AMOUNT if ocean.config.send_raw_data_examples else 0
         )
-        all_entities, register_errors,_ = await self._register_resource_raw(
-            resource_config,
-            raw_results,
-            user_agent_type,
-            send_raw_data_examples_amount=send_raw_data_examples_amount,
-        )
-        errors.extend(register_errors)
-        passed_entities = list(all_entities.passed)
 
+        passed_entities = []
+        if raw_results:
+            calculation_result = await self._register_resource_raw(
+                resource_config,
+                raw_results,
+                user_agent_type,
+                send_raw_data_examples_amount=send_raw_data_examples_amount
+            )
+            errors.extend(calculation_result.errors)
+            passed_entities = list(calculation_result.entity_selector_diff.passed)
+            logger.info(
+                f"Finished registering change for {len(raw_results)} raw results for kind: {resource_config.kind}. {len(passed_entities)} entities were affected"
+            )
+
+        number_of_raw_results = 0
+        number_of_transformed_entities = 0
         for generator in async_generators:
             try:
                 async for items in generator:
+                    number_of_raw_results += len(items)
                     if send_raw_data_examples_amount > 0:
                         send_raw_data_examples_amount = max(
                             0, send_raw_data_examples_amount - len(passed_entities)
                         )
 
-                    entities, register_errors,_ = await self._register_resource_raw(
+                    calculation_result = await self._register_resource_raw(
                         resource_config,
                         items,
                         user_agent_type,
-                        send_raw_data_examples_amount=send_raw_data_examples_amount,
+                        send_raw_data_examples_amount=send_raw_data_examples_amount
                     )
-                    errors.extend(register_errors)
-                    passed_entities.extend(entities.passed)
+                    errors.extend(calculation_result.errors)
+                    passed_entities.extend(calculation_result.entity_selector_diff.passed)
+                    number_of_transformed_entities += calculation_result.number_of_transformed_entities
             except* OceanAbortException as error:
                 errors.append(error)
 
         logger.info(
-            f"Finished registering change for {len(results)} raw results for kind: {resource_config.kind}. {len(passed_entities)} entities were affected"
+            f"Finished registering kind: {resource_config.kind}-{resource.resource.index} ,{len(passed_entities)} entities out of {number_of_raw_results} raw results"
         )
+
+        ocean.metrics.set_metric(
+            name=MetricType.SUCCESS_NAME,
+            labels=[ocean.metrics.current_resource_kind(), MetricPhase.RESYNC],
+            value=int(not errors)
+        )
+
+        ocean.metrics.set_metric(
+            name=MetricType.OBJECT_COUNT_NAME,
+            labels=[ocean.metrics.current_resource_kind(), MetricPhase.EXTRACT],
+            value=number_of_raw_results
+        )
+
+        ocean.metrics.set_metric(
+            name=MetricType.OBJECT_COUNT_NAME,
+            labels=[ocean.metrics.current_resource_kind(), MetricPhase.TRANSFORM],
+            value=number_of_transformed_entities
+        )
+
         return passed_entities, errors
 
     async def register_raw(
@@ -246,7 +388,7 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
         if not resource_mappings:
             return []
 
-        diffs, errors, misconfigured_entity_keys = zip(
+        diffs, errors, _, misconfigured_entity_keys = zip(
             *await asyncio.gather(
                 *(
                     self._register_resource_raw(
@@ -400,6 +542,7 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
                 {"before": entities_before_flatten, "after": entities_after_flatten},
                 user_agent_type,
             )
+
     async def sort_and_upsert_failed_entities(self,user_agent_type: UserAgentType)->None:
         try:
             if not event.entity_topological_sorter.should_execute():
@@ -414,13 +557,16 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
             if isinstance(ocean_abort.__cause__,CycleError):
                 for entity in event.entity_topological_sorter.get_entities(False):
                     await self.entities_state_applier.context.port_client.upsert_entity(entity,event.port_app_config.get_port_request_options(),user_agent_type,should_raise=False)
+
+
+    @TimeMetric(MetricPhase.RESYNC)
     async def sync_raw_all(
         self,
         _: dict[Any, Any] | None = None,
         trigger_type: TriggerType = "machine",
         user_agent_type: UserAgentType = UserAgentType.exporter,
         silent: bool = True,
-    ) -> None:
+    ) -> bool:
         """Perform a full synchronization of raw entities.
 
         This method performs a full synchronization of raw entities, including registration, unregistration,
@@ -433,6 +579,7 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
             silent (bool): Whether to raise exceptions or handle them silently.
         """
         logger.info("Resync was triggered")
+
         async with event_context(
             EventType.RESYNC,
             trigger_type=trigger_type,
@@ -444,11 +591,12 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
             )
             logger.info(f"Resync will use the following mappings: {app_config.dict()}")
 
+            # Execute resync_start hooks
+            for resync_start_fn in self.event_strategy["resync_start"]:
+                await resync_start_fn()
+
             try:
                 did_fetched_current_state = True
-                entities_at_port = await ocean.port_client.search_entities(
-                    user_agent_type
-                )
             except httpx.HTTPError as e:
                 logger.warning(
                     "Failed to fetch the current state of entities at Port. "
@@ -461,20 +609,31 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
 
             creation_results: list[tuple[list[Entity], list[Exception]]] = []
 
+
             try:
-                for resource in app_config.resources:
+                for index,resource in enumerate(app_config.resources):
                     # create resource context per resource kind, so resync method could have access to the resource
                     # config as we might have multiple resources in the same event
-                    async with resource_context(resource):
-                        task = asyncio.get_event_loop().create_task(
+                    async with resource_context(resource,index):
+                        resource_kind_id = f"{resource.kind}-{index}"
+                        task = asyncio.create_task(
                             self._register_in_batches(resource, user_agent_type)
                         )
 
                         event.on_abort(lambda: task.cancel())
+                        kind_results: tuple[list[Entity], list[Exception]] = await task
+                        ocean.metrics.set_metric(
+                            name=MetricType.OBJECT_COUNT_NAME,
+                            labels=[ocean.metrics.current_resource_kind(), MetricPhase.LOAD],
+                            value=len(kind_results[0])
+                        )
 
-                        creation_results.append(await task)
+                        creation_results.append(kind_results)
+
+                        await ocean.metrics.flush(kind=resource_kind_id)
 
                 await self.sort_and_upsert_failed_entities(user_agent_type)
+
             except asyncio.CancelledError as e:
                 logger.warning("Resync aborted successfully, skipping delete phase. This leads to an incomplete state")
                 raise
@@ -487,27 +646,43 @@ class SyncRawMixin(HandlerMixin, EventsMixin):
                     return
 
                 logger.info("Starting resync diff calculation")
-                flat_created_entities, errors = zip_and_sum(creation_results) or [
+                generated_entities, errors = zip_and_sum(creation_results) or [
                     [],
                     [],
                 ]
 
                 if errors:
-                    message = f"Resync failed with {len(errors)}. Skipping delete phase due to incomplete state"
+                    message = f"Resync failed with {len(errors)} errors, skipping delete phase due to incomplete state"
                     error_group = ExceptionGroup(
-                        f"Resync failed with {len(errors)}. Skipping delete phase due to incomplete state",
+                        message,
                         errors,
                     )
                     if not silent:
                         raise error_group
 
                     logger.error(message, exc_info=error_group)
+                    return False
                 else:
                     logger.info(
-                        f"Running resync diff calculation, number of entities at Port before resync: {len(entities_at_port)}, number of entities created during sync: {len(flat_created_entities)}"
+                        f"Running resync diff calculation, number of entities created during sync: {len(generated_entities)}"
+                    )
+                    entities_at_port = await ocean.port_client.search_entities(
+                        user_agent_type
                     )
                     await self.entities_state_applier.delete_diff(
-                        {"before": entities_at_port, "after": flat_created_entities},
-                        user_agent_type,
+                        {"before": entities_at_port, "after": generated_entities},
+                        user_agent_type, app_config.get_entity_deletion_threshold()
                     )
+
                     logger.info("Resync finished successfully")
+
+                    # Execute resync_complete hooks
+                    if "resync_complete" in self.event_strategy:
+                        logger.info("Executing resync_complete hooks")
+
+                        for resync_complete_fn in self.event_strategy["resync_complete"]:
+                            await resync_complete_fn()
+
+                        logger.info("Finished executing resync_complete hooks")
+
+                    return True

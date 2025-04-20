@@ -5,9 +5,17 @@ from datetime import datetime
 from functools import partial
 from http import HTTPStatus
 from typing import Any, Callable, Coroutine, Iterable, Mapping, Union
-
 import httpx
 from dateutil.parser import isoparse
+
+_ON_RETRY_CALLBACK: Callable[[httpx.Request], httpx.Request] | None = None
+
+
+def register_on_retry_callback(
+    _on_retry_callback: Callable[[httpx.Request], httpx.Request]
+) -> None:
+    global _ON_RETRY_CALLBACK
+    _ON_RETRY_CALLBACK = _on_retry_callback
 
 
 # Adapted from https://github.com/encode/httpx/issues/108#issuecomment-1434439481
@@ -43,7 +51,6 @@ class RetryTransport(httpx.AsyncBaseTransport, httpx.BaseTransport):
         _retry_status_codes (frozenset): The HTTP status codes that can be retried.
         _jitter_ratio (float): The amount of jitter to add to the backoff time.
         _max_backoff_wait (float): The maximum time to wait between retries in seconds.
-
     """
 
     RETRYABLE_METHODS = frozenset(["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE"])
@@ -53,6 +60,8 @@ class RetryTransport(httpx.AsyncBaseTransport, httpx.BaseTransport):
             HTTPStatus.BAD_GATEWAY,
             HTTPStatus.SERVICE_UNAVAILABLE,
             HTTPStatus.GATEWAY_TIMEOUT,
+            HTTPStatus.UNAUTHORIZED,
+            HTTPStatus.BAD_REQUEST,
         ]
     )
     MAX_BACKOFF_WAIT_IN_SECONDS = 60
@@ -162,6 +171,7 @@ class RetryTransport(httpx.AsyncBaseTransport, httpx.BaseTransport):
                 response = await self._retry_operation_async(request, send_method)
             else:
                 response = await transport.handle_async_request(request)
+
             return response
         except Exception as e:
             # Retyable methods are logged via _log_error
@@ -316,6 +326,8 @@ class RetryTransport(httpx.AsyncBaseTransport, httpx.BaseTransport):
                 if remaining_attempts < 1:
                     self._log_error(request, error)
                     raise
+            if _ON_RETRY_CALLBACK:
+                request = _ON_RETRY_CALLBACK(request)
             attempts_made += 1
             remaining_attempts -= 1
 
@@ -328,6 +340,7 @@ class RetryTransport(httpx.AsyncBaseTransport, httpx.BaseTransport):
         attempts_made = 0
         response: httpx.Response | None = None
         error: Exception | None = None
+
         while True:
             if attempts_made > 0:
                 sleep_time = self._calculate_sleep(attempts_made, {})
@@ -357,5 +370,7 @@ class RetryTransport(httpx.AsyncBaseTransport, httpx.BaseTransport):
                 if remaining_attempts < 1:
                     self._log_error(request, error)
                     raise
+            if _ON_RETRY_CALLBACK:
+                request = _ON_RETRY_CALLBACK(request)
             attempts_made += 1
             remaining_attempts -= 1

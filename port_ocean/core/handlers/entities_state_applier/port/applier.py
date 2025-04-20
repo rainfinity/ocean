@@ -8,7 +8,9 @@ from port_ocean.core.handlers.entities_state_applier.base import (
 from port_ocean.core.handlers.entities_state_applier.port.get_related_entities import (
     get_related_entities,
 )
-
+from port_ocean.context.ocean import ocean
+from port_ocean.helpers.metric.metric import MetricType, MetricPhase
+from port_ocean.helpers.metric.utils import TimeMetric
 from port_ocean.core.models import Entity
 from port_ocean.core.ocean_types import EntityDiff
 from port_ocean.core.utils.entity_topological_sorter import EntityTopologicalSorter
@@ -23,6 +25,7 @@ class HttpEntitiesStateApplier(BaseEntitiesStateApplier):
     through HTTP requests.
     """
 
+    @TimeMetric(MetricPhase.DELETE)
     async def _safe_delete(
         self,
         entities_to_delete: list[Entity],
@@ -78,6 +81,7 @@ class HttpEntitiesStateApplier(BaseEntitiesStateApplier):
         self,
         entities: EntityDiff,
         user_agent_type: UserAgentType,
+        entity_deletion_threshold: float | None = None,
     ) -> None:
         diff = get_port_diff(entities["before"], entities["after"])
 
@@ -87,36 +91,50 @@ class HttpEntitiesStateApplier(BaseEntitiesStateApplier):
         kept_entities = diff.created + diff.modified
 
         logger.info(
-            f"Determining entities to delete ({len(diff.deleted)}/{len(kept_entities)})"
+            f"Determining entities to delete ({len(diff.deleted)}/{len(kept_entities)})",
+            deleting_entities=len(diff.deleted),
+            keeping_entities=len(kept_entities),
+            entity_deletion_threshold=entity_deletion_threshold,
         )
 
-        await self._safe_delete(diff.deleted, kept_entities, user_agent_type)
+        deletion_rate = len(diff.deleted) / len(entities["before"])
+        if (
+            entity_deletion_threshold is not None
+            and deletion_rate <= entity_deletion_threshold
+        ):
+            await self._safe_delete(diff.deleted, kept_entities, user_agent_type)
+            ocean.metrics.set_metric(
+                name=MetricType.DELETION_COUNT_NAME,
+                labels=[ocean.metrics.current_resource_kind(), MetricPhase.DELETE],
+                value=len(diff.deleted),
+            )
+        else:
+            logger.info(
+                f"Skipping deletion of entities with deletion rate {deletion_rate}",
+                deletion_rate=deletion_rate,
+                deleting_entities=len(diff.deleted),
+                total_entities=len(entities),
+            )
 
     async def upsert(
         self, entities: list[Entity], user_agent_type: UserAgentType
     ) -> list[Entity]:
         logger.info(f"Upserting {len(entities)} entities")
         modified_entities: list[Entity] = []
-        if event.port_app_config.create_missing_related_entities:
-            modified_entities = await self.context.port_client.batch_upsert_entities(
-                entities,
-                event.port_app_config.get_port_request_options(),
-                user_agent_type,
-                should_raise=False,
-            )
-        else:
-            for entity in entities:
-                upsertedEntity = await self.context.port_client.upsert_entity(
-                    entity,
-                    event.port_app_config.get_port_request_options(),
-                    user_agent_type,
-                    should_raise=False,
-                )
-                if upsertedEntity:
-                    modified_entities.append(upsertedEntity)
-                # condition to false to differentiate from `result_entity.is_using_search_identifier`
-                if upsertedEntity is False:
-                    event.entity_topological_sorter.register_entity(entity)
+        upserted_entities: list[tuple[bool, Entity]] = []
+
+        upserted_entities = await self.context.port_client.batch_upsert_entities(
+            entities,
+            event.port_app_config.get_port_request_options(),
+            user_agent_type,
+            should_raise=False,
+        )
+
+        for is_upserted, entity in upserted_entities:
+            if is_upserted:
+                modified_entities.append(entity)
+            else:
+                event.entity_topological_sorter.register_entity(entity)
         return modified_entities
 
     async def delete(

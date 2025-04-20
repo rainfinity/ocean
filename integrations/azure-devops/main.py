@@ -1,19 +1,22 @@
 from typing import Any, cast
+
 from loguru import logger
-from port_ocean.context.ocean import ocean
 from port_ocean.context.event import event
-from azure_devops.client.azure_devops_client import AzureDevopsClient
-from azure_devops.webhooks.webhook_event import WebhookEvent
+from port_ocean.context.ocean import ocean
 from port_ocean.core.ocean_types import ASYNC_GENERATOR_RESYNC_TYPE
-from bootstrap import setup_listeners, webhook_event_handler
 from starlette.requests import Request
+
+from azure_devops.client.azure_devops_client import AzureDevopsClient
 from azure_devops.misc import (
-    Kind,
     PULL_REQUEST_SEARCH_CRITERIA,
     AzureDevopsProjectResourceConfig,
+    AzureDevopsFileResourceConfig,
+    AzureDevopsTeamResourceConfig,
+    AzureDevopsWorkItemResourceConfig,
+    Kind,
 )
-
-from azure_devops.misc import AzureDevopsWorkItemResourceConfig
+from azure_devops.webhooks.webhook_event import WebhookEvent
+from bootstrap import setup_listeners, webhook_event_handler
 
 
 @ocean.on_start()
@@ -53,12 +56,29 @@ async def resync_projects(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
         yield projects
 
 
+@ocean.on_resync(Kind.USER)
+async def resync_users(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
+    azure_devops_client = AzureDevopsClient.create_from_ocean_config()
+    async for users in azure_devops_client.generate_users():
+        logger.info(f"Resyncing {len(users)} members")
+        yield users
+
+
 @ocean.on_resync(Kind.TEAM)
 async def resync_teams(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
     azure_devops_client = AzureDevopsClient.create_from_ocean_config()
+    selector = cast(AzureDevopsTeamResourceConfig, event.resource_config).selector
+
     async for teams in azure_devops_client.generate_teams():
         logger.info(f"Resyncing {len(teams)} teams")
-        yield teams
+        if selector.include_members:
+            logger.info(f"Enriching {len(teams)} teams with members")
+            team_with_members = await azure_devops_client.enrich_teams_with_members(
+                teams
+            )
+            yield team_with_members
+        else:
+            yield teams
 
 
 @ocean.on_resync(Kind.MEMBER)
@@ -138,6 +158,22 @@ async def resync_releases(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
     async for releases in azure_devops_client.generate_releases():
         logger.info(f"Resyncing {len(releases)} releases")
         yield releases
+
+
+@ocean.on_resync(Kind.FILE)
+async def resync_files(kind: str) -> ASYNC_GENERATOR_RESYNC_TYPE:
+    azure_devops_client = AzureDevopsClient.create_from_ocean_config()
+    config = cast(AzureDevopsFileResourceConfig, event.resource_config)
+
+    logger.info(f"Starting file resync for paths: {config.selector.files.path}")
+
+    async for files_batch in azure_devops_client.generate_files(
+        path=config.selector.files.path,
+        repos=config.selector.files.repos,
+    ):
+        if files_batch:
+            logger.info(f"Resyncing batch of {len(files_batch)} files")
+            yield files_batch
 
 
 @ocean.router.post("/webhook")

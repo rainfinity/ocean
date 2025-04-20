@@ -1,14 +1,14 @@
 from typing import Any, Literal, Type, cast
 
-from pydantic import Extra, AnyHttpUrl, parse_obj_as, parse_raw_as
+from pydantic import AnyHttpUrl, Extra, parse_obj_as, parse_raw_as
 from pydantic.class_validators import root_validator, validator
-from pydantic.env_settings import InitSettingsSource, EnvSettingsSource, BaseSettings
+from pydantic.env_settings import BaseSettings, EnvSettingsSource, InitSettingsSource
 from pydantic.fields import Field
 from pydantic.main import BaseModel
 
-from port_ocean.config.base import BaseOceanSettings, BaseOceanModel
+from port_ocean.config.base import BaseOceanModel, BaseOceanSettings
 from port_ocean.core.event_listener import EventListenerSettingsType
-from port_ocean.core.models import Runtime
+from port_ocean.core.models import CreatePortResourcesOrigin, Runtime
 from port_ocean.utils.misc import get_integration_name, get_spec_file
 
 LogLevelType = Literal["ERROR", "WARNING", "INFO", "DEBUG", "CRITICAL"]
@@ -61,6 +61,11 @@ class IntegrationSettings(BaseOceanModel, extra=Extra.allow):
         return values
 
 
+class MetricsSettings(BaseOceanModel, extra=Extra.allow):
+    enabled: bool = Field(default=False)
+    webhook_url: str | None = Field(default=None)
+
+
 class IntegrationConfiguration(BaseOceanSettings, extra=Extra.allow):
     _integration_config_model: BaseModel | None = None
 
@@ -68,7 +73,11 @@ class IntegrationConfiguration(BaseOceanSettings, extra=Extra.allow):
     initialize_port_resources: bool = True
     scheduled_resync_interval: int | None = None
     client_timeout: int = 60
+    # Determines if Port should generate resources such as blueprints and pages instead of ocean
+    create_port_resources_origin: CreatePortResourcesOrigin | None = None
     send_raw_data_examples: bool = True
+    oauth_access_token_file_path: str | None = None
+    base_url: str | None = None
     port: PortSettings
     event_listener: EventListenerSettingsType = Field(
         default=cast(EventListenerSettingsType, {"type": "POLLING"})
@@ -79,6 +88,25 @@ class IntegrationConfiguration(BaseOceanSettings, extra=Extra.allow):
     )
     runtime: Runtime = Runtime.OnPrem
     resources_path: str = Field(default=".port/resources")
+    metrics: MetricsSettings = Field(
+        default_factory=lambda: MetricsSettings(enabled=False, webhook_url=None)
+    )
+    max_event_processing_seconds: float = 90.0
+    max_wait_seconds_before_shutdown: float = 5.0
+
+    @validator("metrics", pre=True)
+    def validate_metrics(cls, v: Any) -> MetricsSettings | dict[str, Any] | None:
+        if v is None:
+            return MetricsSettings(enabled=False, webhook_url=None)
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, MetricsSettings):
+            return v
+        # Try to convert to dict for other types
+        try:
+            return dict(v)
+        except (TypeError, ValueError):
+            return MetricsSettings(enabled=False, webhook_url=None)
 
     @root_validator()
     def validate_integration_config(cls, values: dict[str, Any]) -> dict[str, Any]:
@@ -100,6 +128,20 @@ class IntegrationConfiguration(BaseOceanSettings, extra=Extra.allow):
         )
 
         return values
+
+    @validator("create_port_resources_origin")
+    def validate_create_port_resources_origin(
+        cls, create_port_resources_origin: CreatePortResourcesOrigin | None
+    ) -> CreatePortResourcesOrigin | None:
+        spec = get_spec_file()
+        if spec and spec.get("create_port_resources_origin", None):
+            spec_create_port_resources_origin = spec.get("create_port_resources_origin")
+            if spec_create_port_resources_origin in [
+                CreatePortResourcesOrigin.Port,
+                CreatePortResourcesOrigin.Ocean,
+            ]:
+                return CreatePortResourcesOrigin(spec_create_port_resources_origin)
+        return create_port_resources_origin
 
     @validator("runtime")
     def validate_runtime(cls, runtime: Runtime) -> Runtime:

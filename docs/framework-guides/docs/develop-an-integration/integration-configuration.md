@@ -61,7 +61,7 @@ initializePortResources: true
 
 This configuration is used to specify the interval in minutes in which the integration should initiate a full resync from the 3rd-party system.
 
-By default, this feature is disabled. To enable it, set the value to a positive integer representing the interval in
+By default, this feature is disabled in most integrations. To enable it, set the value to a positive integer representing the interval in
 minutes.
 
 <ResyncAbortMessage />
@@ -83,7 +83,7 @@ port:
   clientSecret: "{{ from env PORT_CLIENT_SECRET }}" # Can be loaded using environment variable: PORT_CLIENT_SECRET
 ```
 
-This section is used to provide the integration with [credentials](https://docs.getport.io/build-your-software-catalog/sync-data-to-catalog/api/#find-your-port-credentials) to Port's API.
+This section is used to provide the integration with [credentials](https://docs.port.io/build-your-software-catalog/sync-data-to-catalog/api/#find-your-port-credentials) to Port's API.
 
 The required parameters are the Port client ID and client secret. As seen in the default configuration, these parameters are taken from the environment variables of the environment running the integration:
 

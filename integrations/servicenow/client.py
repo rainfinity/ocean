@@ -32,12 +32,23 @@ class ServicenowClient:
         }
 
     async def get_paginated_resource(
-        self, resource_kind: str
+        self, resource_kind: str, api_query_params: dict[str, Any] = {}
     ) -> AsyncGenerator[list[dict[str, Any]], None]:
+
+        user_query = api_query_params.pop("sysparm_query", "")
+        default_ordering = "ORDERBYDESCsys_created_on"
+        enhanced_query = (
+            f"{user_query}^{default_ordering}" if user_query else default_ordering
+        )
+
         params: dict[str, Any] = {
             "sysparm_limit": PAGE_SIZE,
-            "sysparm_query": "ORDERBYsys_created_on",
+            "sysparm_query": enhanced_query,
+            **api_query_params,
         }
+        logger.info(
+            f"Fetching Servicenow data for resource: {resource_kind} with request params: {params}"
+        )
         url = f"{self.servicenow_url}/api/now/table/{resource_kind}"
 
         while url:
@@ -65,12 +76,12 @@ class ServicenowClient:
     async def sanity_check(self) -> None:
         try:
             response = await self.http_client.get(
-                f"{self.servicenow_url}/api/now/table/incident?sysparm_limit=1"
+                f"{self.servicenow_url}/api/now/table/sys_user?sysparm_limit=1"
             )
             response.raise_for_status()
             logger.info("Servicenow sanity check passed")
             logger.info(
-                f"Retrieved sample Servicenow incident with number: {response.json().get('result', [])[0].get('number')}"
+                f"Retrieved sample Servicenow user with first name: {response.json().get('result', [])[0].get('first_name')}"
             )
         except httpx.HTTPStatusError as e:
             logger.error(

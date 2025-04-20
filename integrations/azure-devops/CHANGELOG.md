@@ -7,6 +7,343 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.1.146 (2025-04-15)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.22.4
+
+
+## 0.1.145 (2025-04-15)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.22.3
+
+
+## 0.1.144 (2025-04-07)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.22.2
+
+
+## 0.1.143 (2025-04-03)
+
+
+### Improvements
+
+- Added support for fetching pull requests concurently
+
+
+## 0.1.142 (2025-04-03)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.22.1
+
+
+## 0.1.141 (2025-03-24)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.22.0
+
+
+## 0.1.140 (2025-03-18)
+
+
+### Improvements
+
+- Added support for ingesting files from Azure DevOps repositories
+
+
+## 0.1.139 (2025-03-13)
+
+
+### Bug Fixes
+
+- Fixed bug where other resource types fail JSON decoding due to lack of response body in 404 errors
+
+
+## 0.1.138 (2025-03-13)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.21.5
+
+
+## 0.1.137 (2025-03-12)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.21.4
+
+
+## 0.1.136 (2025-03-10)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.21.3
+
+
+## 0.1.135 (2025-03-09)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.21.1
+
+
+## 0.1.134 (2025-03-04)
+
+
+### Bug Fixes
+
+- Fixed bug causing repositories of disabled projects to be fetched, causing failure to retrieve child objects of the repositories
+
+
+## 0.1.133 (2025-03-03)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.21.0
+
+
+## 0.1.132 (2025-02-26)
+
+
+### Bug Fixes
+
+- Fixed bug causing repositories of disabled projects to be fetched, causing failure to retrieve child objects of the repositories
+
+
+## 0.1.131 (2025-02-26)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.20.4
+
+
+## 0.1.130 (2025-02-25)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.20.4
+
+
+## 0.1.129 (2025-02-24)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.20.3
+
+
+## 0.1.128 (2025-02-23)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.20.2
+
+
+## 0.1.127 (2025-02-23)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.20.1
+
+
+## 0.1.126 (2025-02-19)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.20.0
+
+
+## 0.1.125 (2025-02-19)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.19.3
+
+
+## 0.1.124 (2025-02-19)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.19.2
+
+
+## 0.1.123 (2025-02-19)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.19.1
+
+
+## 0.1.122 (2025-02-18)
+
+
+### Bug Fixes
+
+- Fixed bug where inappropriate log level is used leading to the integration crashing
+
+
+## 0.1.121 (2025-02-13)
+
+
+### Improvements
+
+- Bumped cryptography version to ^44.0.1
+
+
+## 0.1.120 (2025-02-11)
+
+
+### Bug Fixes
+
+- Fixed an issue where if the organization URL was formatted like https://org.visualstudio.com pulling release would return 404
+
+
+## 0.1.119 (2025-02-11)
+
+
+### Bug Fixes
+
+- Modified the work item fetching logic to retrieve work items in paginated batches rather than loading up to 19,999 items in a single request.
+
+
+## 0.1.118 (2025-02-11)
+
+
+### Bugfix
+
+- Fixed an issue where if the organization url was formatted like https://XXX.visualstudio.com pulling users would return 404
+
+
+## 0.1.117 (2025-02-09)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.18.9
+
+
+## 0.1.116 (2025-02-5)
+
+
+### Improvements
+
+- Added support for User kind
+- Added selector `includeMembers` to enable enriching team with members
+
+
+## 0.1.115 (2025-02-04)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.18.8
+
+
+## 0.1.114 (2025-01-29)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.18.6
+
+
+## 0.1.113 (2025-01-28)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.18.5
+
+
+## 0.1.112 (2025-01-23)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.18.4
+
+
+## 0.1.111 (2025-01-22)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.18.3
+
+
+## 0.1.110 (2025-01-22)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.18.2
+
+
+## 0.1.109 (2025-01-21)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.18.1
+
+
+## 0.1.108 (2025-01-19)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.18.0
+
+
+## 0.1.107 (2025-01-16)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.17.8
+
+
+## 0.1.106 (2025-01-15)
+
+
+### Improvements
+
+- Bumped jinja version to 3.1.5
+
+
+## 0.1.105 (2025-01-12)
+
+
+### Improvements
+
+- Bumped ocean version to ^0.17.7
+
+
 ## 0.1.104 (2025-01-08)
 
 

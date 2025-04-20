@@ -14,7 +14,7 @@ class EventListenerEvents(TypedDict):
     A dictionary containing event types and their corresponding event handlers.
     """
 
-    on_resync: Callable[[dict[Any, Any]], Awaitable[None]]
+    on_resync: Callable[[dict[Any, Any]], Awaitable[bool]]
 
 
 class BaseEventListener:
@@ -67,8 +67,11 @@ class BaseEventListener:
         """
         await self._before_resync()
         try:
-            await self.events["on_resync"](resync_args)
-            await self._after_resync()
+            resync_succeeded = await self.events["on_resync"](resync_args)
+            if resync_succeeded:
+                await self._after_resync()
+            else:
+                await self._on_resync_failure(Exception("Resync failed"))
         except Exception as e:
             await self._on_resync_failure(e)
             raise e
@@ -78,8 +81,16 @@ class EventListenerSettings(BaseOceanModel, extra=Extra.allow):
     type: str
     should_resync: bool = True
 
-    def to_request(self) -> dict[str, Any]:
+    def get_changelog_destination_details(self) -> dict[str, Any]:
         """
-        Converts the Settings object to a dictionary representation (request format).
+        Returns the changelog destination configuration for the event listener.
+        By default, returns an empty dict. Only KAFKA and WEBHOOK event listeners need to override this
+        to provide their specific changelog destination details.
+
+        Returns:
+            dict[str, Any]: The changelog destination configuration. For example:
+                - KAFKA returns {"type": "KAFKA"}
+                - WEBHOOK returns {"type": "WEBHOOK", "url": "https://example.com/resync"}
+                - Other event listeners return {}
         """
-        return {"type": self.type}
+        return {}

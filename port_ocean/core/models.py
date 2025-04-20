@@ -1,9 +1,14 @@
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 from pydantic import BaseModel
 from pydantic.fields import Field
+
+
+class CreatePortResourcesOrigin(StrEnum):
+    Ocean = "Ocean"
+    Port = "Port"
 
 
 class Runtime(Enum):
@@ -35,13 +40,21 @@ class Entity(BaseModel):
     identifier: Any
     blueprint: Any
     title: Any
-    team: str | None | list[Any] = []
+    team: str | None | list[Any] | dict[str, Any] = []
     properties: dict[str, Any] = {}
     relations: dict[str, Any] = {}
 
     @property
     def is_using_search_identifier(self) -> bool:
         return isinstance(self.identifier, dict)
+
+    @property
+    def is_using_search_relation(self) -> bool:
+        return any(
+            isinstance(relation, dict) for relation in self.relations.values()
+        ) or (
+            self.team is not None and any(isinstance(team, dict) for team in self.team)
+        )
 
 
 class BlueprintRelation(BaseModel):
